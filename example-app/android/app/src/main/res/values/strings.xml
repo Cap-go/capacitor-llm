@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">example-app-vue</string>
-    <string name="title_activity_main">example-app-vue</string>
-    <string name="package_name">io.ionic.starter</string>
-    <string name="custom_url_scheme">io.ionic.starter</string>
+    <string name="app_name">LLM Example</string>
+    <string name="title_activity_main">LLM Example</string>
+    <string name="package_name">app.capgo.llm</string>
+    <string name="custom_url_scheme">app.capgo.llm</string>
 </resources>

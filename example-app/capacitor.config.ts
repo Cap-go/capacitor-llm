@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'io.ionic.starter',
-  appName: 'example-app-vue',
+  appId: 'app.capgo.llm',
+  appName: 'LLM Example',
   webDir: 'dist',
   android: {
     adjustMarginsForEdgeToEdge: 'auto'
