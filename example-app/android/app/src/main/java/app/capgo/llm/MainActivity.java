@@ -1,4 +1,4 @@
-package io.ionic.starter;
+package app.capgo.llm;
 
 import com.getcapacitor.BridgeActivity;
 
