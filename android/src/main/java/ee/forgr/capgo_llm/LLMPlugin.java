@@ -149,7 +149,7 @@ public class LLMPlugin extends Plugin {
                 java.io.File filesDir = getContext().getFilesDir();
                 java.io.File modelFile = new java.io.File(filesDir, finalFilename);
 
-                downloadFile(url, modelFile, progress -> {
+                downloadFile(url, modelFile, (progress) -> {
                     JSObject event = new JSObject();
                     event.put("progress", progress);
                     notifyListeners("downloadProgress", event);
@@ -163,7 +163,7 @@ public class LLMPlugin extends Plugin {
                     String companionFilename = companionUrl.substring(companionUrl.lastIndexOf("/") + 1);
                     java.io.File companionFile = new java.io.File(filesDir, companionFilename);
 
-                    downloadFile(companionUrl, companionFile, progress -> {
+                    downloadFile(companionUrl, companionFile, (progress) -> {
                         JSObject event = new JSObject();
                         event.put("progress", progress);
                         notifyListeners("downloadProgress", event);
@@ -176,7 +176,8 @@ public class LLMPlugin extends Plugin {
             } catch (Exception e) {
                 call.reject("Failed to download model", e.getMessage());
             }
-        }).start();
+        })
+            .start();
     }
 
     private void downloadFile(String urlString, java.io.File outputFile, ProgressCallback callback) throws Exception {
