@@ -1,7 +1,7 @@
-require_relative '../../../node_modules/@capacitor/ios/scripts/pods_helpers'
+require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
 platform :ios, '14.0'
-use_frameworks! :linkage => :static
+use_frameworks!
 
 # workaround to avoid Xcode caching of Pods that requires
 # Product -> Clean Build Folder after new Cordova plugins installed
@@ -9,12 +9,8 @@ use_frameworks! :linkage => :static
 install! 'cocoapods', :disable_input_output_paths => true
 
 def capacitor_pods
-  pod 'Capacitor', :path => '../../../node_modules/@capacitor/ios'
-  pod 'CapacitorCordova', :path => '../../../node_modules/@capacitor/ios'
-  pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
-  pod 'CapacitorHaptics', :path => '../../node_modules/@capacitor/haptics'
-  pod 'CapacitorKeyboard', :path => '../../node_modules/@capacitor/keyboard'
-  pod 'CapacitorStatusBar', :path => '../../node_modules/@capacitor/status-bar'
+  pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+  pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
   pod 'CapgoCapacitorLlm', :path => '../../..'
 end
 
@@ -25,18 +21,4 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
-  
-  # Fix for static framework dependencies
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
-    end
-    
-    # Specifically for MediaPipe pods
-    if target.name.include?('MediaPipeTasksGenAI')
-      target.build_configurations.each do |config|
-        config.build_settings['ENABLE_BITCODE'] = 'NO'
-      end
-    end
-  end
 end
