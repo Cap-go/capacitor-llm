@@ -13,7 +13,7 @@
     "ios/Sources",
     "ios/Tests",
     "Package.swift",
-    "CapgoLLM.podspec"
+    "CapgoCapacitorLlm.podspec"
   ],
   "author": "WcaleNieWolny <michael@capgo.app>",
   "license": "MIT",
