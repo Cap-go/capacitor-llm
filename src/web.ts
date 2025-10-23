@@ -172,4 +172,8 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       throw error;
     }
   }
+
+  async getPluginVersion(): Promise<{ version: string }> {
+    return { version: 'web' };
+  }
 }

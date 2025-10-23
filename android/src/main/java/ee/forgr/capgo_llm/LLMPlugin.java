@@ -9,6 +9,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "CapgoLLM")
 public class LLMPlugin extends Plugin {
 
+    private final String PLUGIN_VERSION = "";
+
     private LLM llm;
 
     @Override
@@ -208,5 +210,16 @@ public class LLMPlugin extends Plugin {
 
     interface ProgressCallback {
         void onProgress(int percentage);
+    }
+
+    @PluginMethod
+    public void getPluginVersion(final PluginCall call) {
+        try {
+            final JSObject ret = new JSObject();
+            ret.put("version", this.PLUGIN_VERSION);
+            call.resolve(ret);
+        } catch (final Exception e) {
+            call.reject("Could not get plugin version", e);
+        }
     }
 }

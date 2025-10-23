@@ -16,6 +16,7 @@ import MediaPipeTasksGenAI
 
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
+    private let PLUGIN_VERSION: String = ""
     public let identifier = "LLMPlugin"
     public let jsName = "CapgoLLM"
     public var pluginMethods: [CAPPluginMethod] = [
@@ -23,7 +24,8 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "sendMessage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getReadiness", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setModel", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "downloadModel", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "downloadModel", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getPluginVersion", returnType: CAPPluginReturnPromise)
     ]
 
     private enum ModelType {
@@ -466,4 +468,9 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
                     didFinishDownloadingTo location: URL) {
         // Handled in the completion handler
     }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
+    }
+
 }
