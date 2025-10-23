@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.2.1](https://github.com/Cap-go/capacitor-llm/compare/7.2.0...7.2.1) (2025-10-23)
+
+
+### Bug Fixes
+
+* remove footer in discord ([aaeba5b](https://github.com/Cap-go/capacitor-llm/commit/aaeba5b04bcedaceb210be7f77159d13efe74068))
+* update Discord release notification username to include repository name ([c5c771c](https://github.com/Cap-go/capacitor-llm/commit/c5c771cf1df9495c56bcec32c7fb11de1fdb6c78))
+
 ## [7.2.0](https://github.com/Cap-go/capacitor-llm/compare/7.1.16...7.2.0) (2025-10-23)
 
 
