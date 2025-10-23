@@ -444,6 +444,10 @@ Model configuration options
 | **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                               |
 | **`randomSeed`**  | <code>number</code> | Random seed for generation                                                                                 |
 
+| Method               | Signature                                    | Description                             |
+| -------------------- | -------------------------------------------- | --------------------------------------- |
+| **getPluginVersion** | () =&gt; Promise&lt;{ version: string; }&gt; | Get the native Capacitor plugin version |
+
 
 #### DownloadModelResult
 
