@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.2.0](https://github.com/Cap-go/capacitor-llm/compare/7.1.16...7.2.0) (2025-10-23)
+
+
+### Features
+
+* add getPluginVersion method to LLMPlugin and update workflows for changelog generation ([f64e7e0](https://github.com/Cap-go/capacitor-llm/commit/f64e7e034c41a035306ea67331d1b5fa0ada29fc))
+
+
+### Bug Fixes
+
+* remove content field from Discord release notification ([02cfc76](https://github.com/Cap-go/capacitor-llm/commit/02cfc761a6911cad262f07e37c116953ac1b829e))
+
 ## [7.1.16](https://github.com/Cap-go/capacitor-llm/compare/7.1.15...7.1.16) (2025-10-20)
 
 
