@@ -60,7 +60,19 @@ end
 ```
 
 **Using Swift Package Manager:**
-MediaPipe GenAI is currently only available via CocoaPods. While community packages like [SwiftTasksGenAI](https://github.com/paescebu/SwiftTasksGenAI) exist, they contain unsafe build flags that prevent their use in standard SPM builds. For custom models on iOS, CocoaPods is required. However, **Apple Intelligence works with SPM** and is the recommended approach for iOS.
+
+MediaPipe GenAI does not officially support SPM yet (see [MediaPipe issue #5464](https://github.com/google-ai-edge/mediapipe/issues/5464)). However, you can use the community package [SwiftTasksGenAI](https://github.com/paescebu/SwiftTasksGenAI) by adding it manually in Xcode:
+
+**To add MediaPipe GenAI via SPM:**
+1. Open your app project in Xcode
+2. Go to **File > Add Package Dependencies...**
+3. Enter the URL: `https://github.com/paescebu/SwiftTasksGenAI.git`
+4. Select your desired version (e.g., 0.10.24)
+5. Add the `SwiftTasksGenAI` product to your app target
+
+**Note:** SwiftTasksGenAI uses unsafe build flags, which means it cannot be added directly in Package.swift files, but works fine when added through Xcode's UI. This is the same approach used by SwiftTasksVision.
+
+**Alternatively:** Use CocoaPods for a more traditional setup, or use Apple Intelligence (iOS 18.2+) which works with both SPM and CocoaPods.
 
 ## Adding a Model to Your App
 
