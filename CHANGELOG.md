@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.2.4](https://github.com/Cap-go/capacitor-llm/compare/7.2.3...7.2.4) (2025-10-26)
+
+
+### Bug Fixes
+
+* build swift ([311f12d](https://github.com/Cap-go/capacitor-llm/commit/311f12db716407821c9eb5d4e96c0888432dac17))
+
 ## [7.2.3](https://github.com/Cap-go/capacitor-llm/compare/7.2.2...7.2.3) (2025-10-26)
 
 
