@@ -11,6 +11,10 @@ Adds support for LLM locally runned for Capacitor
 
 It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android
 
+## Documentation
+
+The most complete doc is available here: https://capgo.app/docs/plugins/llm/
+
 ## Installation
 
 ```bash
