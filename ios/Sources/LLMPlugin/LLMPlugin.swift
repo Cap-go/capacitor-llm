@@ -439,6 +439,10 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
         downloadTask.resume()
     }
+
+    @objc func getPluginVersion(_ call: CAPPluginCall) {
+        call.resolve(["version": self.PLUGIN_VERSION])
+    }
 }
 
 // Download delegate class to handle progress updates
@@ -467,10 +471,6 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
         // Handled in the completion handler
-    }
-
-    @objc func getPluginVersion(_ call: CAPPluginCall) {
-        call.resolve(["version": self.PLUGIN_VERSION])
     }
 
 }

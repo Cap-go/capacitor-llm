@@ -82,6 +82,20 @@ export interface LLMPlugin {
     eventName: 'readinessChange',
     listenerFunc: (event: ReadinessChangeEvent) => void,
   ): Promise<{ remove: () => Promise<void> }>;
+
+  /**
+   * Get the native Capacitor plugin version.
+   *
+   * @returns Promise that resolves with the plugin version
+   * @throws Error if getting the version fails
+   * @since 1.0.0
+   * @example
+   * ```typescript
+   * const { version } = await CapgoLLM.getPluginVersion();
+   * console.log('Plugin version:', version);
+   * ```
+   */
+  getPluginVersion(): Promise<{ version: string }>;
 }
 
 /**
@@ -162,12 +176,4 @@ export interface ModelOptions {
   temperature?: number;
   /** Random seed for generation */
   randomSeed?: number;
-
-  /**
-   * Get the native Capacitor plugin version
-   *
-   * @returns {Promise<{ id: string }>} an Promise with version for this device
-   * @throws An error if the something went wrong
-   */
-  getPluginVersion(): Promise<{ version: string }>;
 }

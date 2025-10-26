@@ -60,7 +60,7 @@ end
 ```
 
 **Using Swift Package Manager:**
-MediaPipe GenAI is currently only available via CocoaPods. SPM support may be added in the future via community packages like SwiftTasksVision.
+MediaPipe GenAI is currently only available via CocoaPods. While community packages like [SwiftTasksGenAI](https://github.com/paescebu/SwiftTasksGenAI) exist, they contain unsafe build flags that prevent their use in standard SPM builds. For custom models on iOS, CocoaPods is required. However, **Apple Intelligence works with SPM** and is the recommended approach for iOS.
 
 ## Adding a Model to Your App
 
@@ -274,6 +274,7 @@ await CapgoLLM.sendMessage({
 * [`addListener('aiFinished', ...)`](#addlisteneraifinished-)
 * [`addListener('downloadProgress', ...)`](#addlistenerdownloadprogress-)
 * [`addListener('readinessChange', ...)`](#addlistenerreadinesschange-)
+* [`getPluginVersion()`](#getpluginversion)
 * [Interfaces](#interfaces)
 
 </docgen-index>
@@ -432,6 +433,21 @@ Adds a listener for readiness status changes
 --------------------
 
 
+### getPluginVersion()
+
+```typescript
+getPluginVersion() => Promise<{ version: string; }>
+```
+
+Get the native Capacitor plugin version.
+
+**Returns:** <code>Promise&lt;{ version: string; }&gt;</code>
+
+**Since:** 1.0.0
+
+--------------------
+
+
 ### Interfaces
 
 
@@ -447,10 +463,6 @@ Model configuration options
 | **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                          |
 | **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                               |
 | **`randomSeed`**  | <code>number</code> | Random seed for generation                                                                                 |
-
-| Method               | Signature                                    | Description                             |
-| -------------------- | -------------------------------------------- | --------------------------------------- |
-| **getPluginVersion** | () =&gt; Promise&lt;{ version: string; }&gt; | Get the native Capacitor plugin version |
 
 
 #### DownloadModelResult
