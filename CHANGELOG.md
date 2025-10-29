@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.2.7](https://github.com/Cap-go/capacitor-llm/compare/7.2.6...7.2.7) (2025-10-29)
+
+
+### Bug Fixes
+
+* CI/CD config ([a94a603](https://github.com/Cap-go/capacitor-llm/commit/a94a603126d55fcaf5a62b3177e165c1ce9c3f18))
+* model github action ([8ee4fca](https://github.com/Cap-go/capacitor-llm/commit/8ee4fca64ce1eb91b54e24063c384bf69b7788b0))
+* update github action ([39e1584](https://github.com/Cap-go/capacitor-llm/commit/39e1584aa2f02e367ad4c8a884dbf97d68664ab6))
+
 ## [7.2.6](https://github.com/Cap-go/capacitor-llm/compare/7.2.5...7.2.6) (2025-10-27)
 
 
