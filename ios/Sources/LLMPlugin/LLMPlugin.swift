@@ -16,7 +16,7 @@ import MediaPipeTasksGenAI
 
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let PLUGIN_VERSION: String = "7.2.7"
+    private let pluginVersion: String = "7.2.7"
     public let identifier = "LLMPlugin"
     public let jsName = "CapgoLLM"
     public var pluginMethods: [CAPPluginMethod] = [
@@ -441,7 +441,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
-        call.resolve(["version": self.PLUGIN_VERSION])
+        call.resolve(["version": self.pluginVersion])
     }
 }
 
