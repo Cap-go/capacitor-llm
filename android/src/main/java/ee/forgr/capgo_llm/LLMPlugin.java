@@ -9,7 +9,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "CapgoLLM")
 public class LLMPlugin extends Plugin {
 
-    private final String pluginVersion = "7.2.7";
+    private final String pluginVersion = "7.2.8";
 
     private LLM llm;
 

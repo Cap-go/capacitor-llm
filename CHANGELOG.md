@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [commit-and-tag-version](https://github.com/absolute-version/commit-and-tag-version) for commit guidelines.
 
+## [7.2.8](https://github.com/Cap-go/capacitor-llm/compare/7.2.7...7.2.8) (2025-10-30)
+
+
+### Bug Fixes
+
+* pluginVersion lint issue ([eebe299](https://github.com/Cap-go/capacitor-llm/commit/eebe29940e4256707891c18cb3089b2033cc2f2e))
+
 ## [7.2.7](https://github.com/Cap-go/capacitor-llm/compare/7.2.6...7.2.7) (2025-10-29)
 
 
