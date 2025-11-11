@@ -154,7 +154,7 @@ const chat = await CapgoLLM.createChat();
 
 For Android, you need to include a compatible LLM model in your app. The plugin uses MediaPipe's tasks-genai, which supports various model formats.
 
-When Gemini mini will be out of close alpha we might add it as default like we do Apple inteligence default
+When Gemini mini will be out of close alpha we might add it as default like we do Apple intelligence default
 https://developer.android.com/ai/gemini-nano/experimental
 
 **Important:** Your app's `minSdkVersion` must be set to 24 or higher. Update your `android/variables.gradle` file:
