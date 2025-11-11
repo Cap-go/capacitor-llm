@@ -16,7 +16,7 @@ import MediaPipeTasksGenAI
 
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let pluginVersion: String = "7.2.10"
+    private let pluginVersion: String = "7.2.11"
     public let identifier = "LLMPlugin"
     public let jsName = "CapgoLLM"
     public var pluginMethods: [CAPPluginMethod] = [
