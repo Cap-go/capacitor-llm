@@ -7,7 +7,7 @@
   <h2><a href="https://capgo.app/consulting/?ref=plugin_llm"> Fix your annoying bug now, Hire a Capacitor expert 💪</a></h2>
 </div>
 
-Adds support for LLM locally runned for Capacitor
+Adds support for LLM locally run for Capacitor
 
 It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android
 
