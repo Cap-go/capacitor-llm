@@ -16,7 +16,7 @@
     "CapgoCapacitorLlm.podspec"
   ],
   "author": "WcaleNieWolny <michael@capgo.app>",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Cap-go/capacitor-llm.git"
