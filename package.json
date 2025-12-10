@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-llm",
-  "version": "7.2.15",
+  "version": "8.0.0",
   "description": "Adds support for LLM locally runned for Capacitor",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -54,25 +54,25 @@
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {
-    "@capacitor/android": "^7.0.0",
-    "@capacitor/core": "^7.0.0",
-    "@capacitor/docgen": "^0.3.0",
-    "@capacitor/ios": "^7.0.0",
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/docgen": "^0.3.1",
+    "@capacitor/ios": "^8.0.0",
     "@ionic/eslint-config": "^0.4.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^2.0.0",
     "@webgpu/types": "^0.1.64",
-    "eslint": "^8.57.0",
+    "eslint": "^8.57.1",
     "google-protobuf": "^3.21.4",
-    "prettier": "^3.4.2",
-    "prettier-plugin-java": "^2.6.6",
-    "rimraf": "^6.0.1",
-    "rollup": "^4.30.1",
+    "prettier": "^3.6.2",
+    "prettier-plugin-java": "^2.7.7",
+    "rimraf": "^6.1.0",
+    "rollup": "^4.53.2",
     "swiftlint": "^2.0.0",
-    "typescript": "~4.1.5"
+    "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@capacitor/core": ">=7.0.0",
+    "@capacitor/core": ">=8.0.0",
     "@mediapipe/tasks-genai": "^0.10.24"
   },
   "prettier": "@ionic/prettier-config",
