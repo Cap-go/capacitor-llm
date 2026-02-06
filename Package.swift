@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "CapgoLLM",
+    name: "CapgoCapacitorLlm",
     platforms: [.iOS(.v15)],
     products: [
         .library(
-            name: "CapgoLLM",
+            name: "CapgoCapacitorLlm",
             targets: ["LLMPlugin"])
     ],
     dependencies: [
