@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-llm",
-  "version": "8.0.8",
+  "version": "8.0.9",
   "description": "Adds support for LLM locally runned for Capacitor",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
