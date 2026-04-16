@@ -41,34 +41,40 @@ public class LLMPlugin extends Plugin {
             return;
         }
 
-        llm.sendMessage(
-            chatId,
-            message,
-            new LLM.MessageCallback() {
-                @Override
-                public void onTextReceived(String chatId, String text, boolean isChunk) {
-                    JSObject event = new JSObject();
-                    event.put("text", text);
-                    event.put("chatId", chatId);
-                    event.put("isChunk", isChunk);
-                    notifyListeners("textFromAi", event);
-                }
+        try {
+            llm.sendMessage(
+                chatId,
+                message,
+                new LLM.MessageCallback() {
+                    @Override
+                    public void onTextReceived(String chatId, String text, boolean isChunk) {
+                        JSObject event = new JSObject();
+                        event.put("text", text);
+                        event.put("chatId", chatId);
+                        event.put("isChunk", isChunk);
+                        notifyListeners("textFromAi", event);
+                    }
 
-                @Override
-                public void onComplete(String chatId) {
-                    JSObject event = new JSObject();
-                    event.put("chatId", chatId);
-                    notifyListeners("aiFinished", event);
-                }
+                    @Override
+                    public void onComplete(String chatId) {
+                        JSObject event = new JSObject();
+                        event.put("chatId", chatId);
+                        notifyListeners("aiFinished", event);
+                    }
 
-                @Override
-                public void onError(String error) {
-                    call.reject("Failed to send message", error);
+                    @Override
+                    public void onError(String error) {
+                        JSObject event = new JSObject();
+                        event.put("readiness", "Failed to generate response: " + error);
+                        notifyListeners("readinessChange", event);
+                    }
                 }
-            }
-        );
+            );
 
-        call.resolve();
+            call.resolve();
+        } catch (IllegalStateException exception) {
+            call.reject(exception.getMessage());
+        }
     }
 
     @PluginMethod
@@ -98,12 +104,15 @@ public class LLMPlugin extends Plugin {
         Integer topk = call.getInt("topk", 40);
         Float temperature = call.getFloat("temperature", 0.8f);
         Integer randomSeed = call.getInt("randomSeed", 101);
+        String modelType = call.getString("modelType");
 
         llm.setModel(
             path,
+            modelType,
             maxTokens,
             topk,
             temperature,
+            randomSeed,
             new LLM.ModelLoadCallback() {
                 @Override
                 public void onSuccess() {

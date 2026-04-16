@@ -78,18 +78,18 @@
     <ion-footer>
       <ion-toolbar>
         <ion-item class="message-input-item">
-          <ion-input 
+          <ion-input
             v-model="newMessage"
-            placeholder="Type a message..." 
+            :placeholder="inputPlaceholder"
             class="message-input"
             @keyup.enter="sendMessage"
           ></ion-input>
-          <ion-button 
-            slot="end" 
-            fill="solid" 
-            shape="round" 
+          <ion-button
+            slot="end"
+            fill="solid"
+            shape="round"
             @click="sendMessage"
-            :disabled="!newMessage.trim()"
+            :disabled="!canSendMessage"
             class="send-button"
           >
             <ion-icon :icon="sendIcon" />
@@ -174,7 +174,6 @@ import {
   IonIcon,
   IonFooter,
   IonChip,
-  IonToggle,
   IonModal,
   IonButtons,
   IonProgressBar,
@@ -206,31 +205,27 @@ const isDownloading = ref(false);
 const selectedModel = ref('apple-intelligence');
 const showModelSelector = ref(false);
 let listenerRemove: (() => Promise<void>) | null = null;
-let readinessInterval: NodeJS.Timeout | null = null;
 
-const messages = ref<Message[]>([
-  {
-    id: 1,
-    text: "What is life?",
-    isUser: true,
-    timestamp: new Date(),
-    isComplete: true
-  },
-  {
-    id: 2,
-    text: "life is fun!",
-    isUser: false,
-    timestamp: new Date(),
-    isComplete: true
-  }
-]);
-
-let messageIdCounter = 3;
-
-// Model selection state
-const useMediaPipe = ref(false);
+const messages = ref<Message[]>([]);
+let messageIdCounter = 1;
 const isIOS = computed(() => Capacitor.getPlatform() === 'ios');
 const isAndroid = computed(() => Capacitor.getPlatform() === 'android');
+const canSendMessage = computed(() => Boolean(newMessage.value.trim()) && Boolean(chatId.value) && readinessStatus.value === 'ready');
+const inputPlaceholder = computed(() => {
+  if (chatId.value) {
+    return 'Type a message...';
+  }
+
+  if (isAndroid.value) {
+    return 'Select a Gemma 4 model first...';
+  }
+
+  if (isIOS.value) {
+    return 'Preparing Apple Intelligence...';
+  }
+
+  return 'Load a model first...';
+});
 
 // Model type definition
 interface Model {
@@ -240,7 +235,6 @@ interface Model {
   url?: string;
   companionUrl?: string;
   filename?: string;
-  companionFilename?: string;
   path?: string;
   modelType?: string;
   maxTokens?: number;
@@ -258,55 +252,35 @@ const models: { ios: Model[], android: Model[] } = {
       note: 'System LLM - no download needed'
     },
     {
-      id: 'gemma2-2b-bundled',
-      name: 'Gemma 2 2B (Bundled)',
+      id: 'gemma2-2b-legacy',
+      name: 'Gemma 2 2B (Legacy MediaPipe)',
       needsDownload: false,
       path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
       modelType: 'task',
       maxTokens: 1280,
-      note: 'Pre-installed in app bundle (if added to Xcode)'
-    },
-    { 
-      id: 'gemma2-2b-download', 
-      name: 'Gemma 2 2B (Download)', 
-      needsDownload: true,
-      // Note: This is a placeholder URL - actual MediaPipe models need manual download
-      url: 'https://example.com/gemma2-2b.task',
-      filename: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280.task',
-      path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
-      modelType: 'task',
-      maxTokens: 1280,
-      note: 'Demo - replace URL with actual model URL'
+      note: 'Manual bundle setup only. Android is the Gemma 4 LiteRT showcase.'
     }
   ],
   android: [
-    { 
-      id: 'gemma3-270m', 
-      name: 'Gemma 3 270M (Bundled)', 
-      needsDownload: false,
-      path: '/android_asset/gemma-3-270m-it-int8.task',
-      maxTokens: 2048,
-      note: 'Pre-installed in assets folder'
-    },
     {
-      id: 'gemma3-1b-bundled',
-      name: 'Gemma 3 1B (Bundled)',
-      needsDownload: false,
-      path: '/android_asset/gemma-3-1b-it-int8.task',
-      maxTokens: 2048,
-      note: 'Pre-installed in assets folder (if added)'
-    },
-    {
-      id: 'gemma3-270m-download',
-      name: 'Gemma 3 270M (Download)',
+      id: 'gemma4-e2b-download',
+      name: 'Gemma 4 E2B (LiteRT-LM)',
       needsDownload: true,
-      // This is a demo URL - replace with actual model URL
-      url: 'https://example.com/gemma-3-270m-it-int8.task',
-      companionUrl: 'https://example.com/gemma-3-270m-it-int8.litertlm',
-      filename: 'gemma-3-270m-it-int8.task',
-      companionFilename: 'gemma-3-270m-it-int8.litertlm',
-      maxTokens: 2048,
-      note: 'Demo - replace URLs with actual model URLs'
+      url: 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true',
+      filename: 'gemma-4-E2B-it.litertlm',
+      modelType: 'litertlm',
+      maxTokens: 4096,
+      note: 'Recommended Android model. Real LiteRT-LM bundle from litert-community.'
+    },
+    {
+      id: 'gemma4-e4b-download',
+      name: 'Gemma 4 E4B (LiteRT-LM)',
+      needsDownload: true,
+      url: 'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm?download=true',
+      filename: 'gemma-4-E4B-it.litertlm',
+      modelType: 'litertlm',
+      maxTokens: 4096,
+      note: 'Larger Gemma 4 variant for devices with more RAM.'
     }
   ]
 };
@@ -330,6 +304,22 @@ const scrollToBottom = async () => {
   }
 };
 
+const setConversationIntro = (text: string) => {
+  messages.value = [
+    {
+      id: 1,
+      text,
+      isUser: false,
+      timestamp: new Date(),
+      isComplete: true,
+    },
+  ];
+  messageIdCounter = 2;
+  currentAiMessageId.value = null;
+  rawMessages.clear();
+  isThinking.value = false;
+};
+
 const isTypingComplete = (message: Message) => {
   return message.isComplete !== false;
 };
@@ -338,11 +328,15 @@ const getReadinessColor = () => {
   switch (readinessStatus.value) {
     case 'ready':
       return 'success';
-    case 'notReady':
+    case 'loading':
+    case 'not_ready':
       return 'warning';
-    case 'notSupported':
+    case 'error':
       return 'danger';
     default:
+      if (readinessStatus.value.toLowerCase().startsWith('failed')) {
+        return 'danger';
+      }
       return 'medium';
   }
 };
@@ -353,7 +347,7 @@ const checkReadiness = async () => {
     readinessStatus.value = result.readiness;
   } catch (error) {
     console.error('Error checking readiness:', error);
-    readinessStatus.value = 'Error';
+    readinessStatus.value = 'error';
   }
 };
 
@@ -388,7 +382,7 @@ const handleAiResponse = async (event: TextFromAiEvent) => {
 };
 
 const sendMessage = async () => {
-  if (newMessage.value.trim() && chatId.value) {
+  if (canSendMessage.value) {
     // Add user message
     const userMessage: Message = {
       id: messageIdCounter++,
@@ -488,13 +482,10 @@ const downloadModel = async (model: Model) => {
 const selectModel = async (model: Model) => {
   try {
     selectedModel.value = model.id;
-    
-    // Clear existing chat
-    if (chatId.value) {
-      chatId.value = '';
-      messages.value = [];
-    }
-    
+
+    chatId.value = '';
+    setConversationIntro(`Preparing ${model.name}...`);
+
     if (model.id === 'apple-intelligence') {
       await CapgoLLM.setModel({ path: 'Apple Intelligence' });
     } else if (model.downloadedPath || !model.needsDownload) {
@@ -513,6 +504,7 @@ const selectModel = async (model: Model) => {
     
     // Recreate chat
     await initializeChat();
+    setConversationIntro(`${model.name} is ready. Ask anything.`);
     showModelSelector.value = false;
     
   } catch (error) {
@@ -535,6 +527,8 @@ const initializeChat = async () => {
 
 onMounted(async () => {
   try {
+    setConversationIntro('Checking model readiness...');
+
     // Set up readiness listener
     const readinessListener = await CapgoLLM.addListener('readinessChange', (event) => {
       readinessStatus.value = event.readiness;
@@ -545,31 +539,23 @@ onMounted(async () => {
     await checkReadiness();
     
     // Set model path based on platform
-    // This is optional - if not called, iOS will use Apple Intelligence by default
     try {
       const platform = Capacitor.getPlatform();
-      if (platform === 'android') {
-        // Use the downloaded Gemma 3 270M model for Android
-        await CapgoLLM.setModel({ 
-          path: '/android_asset/gemma-3-270m-it-int8.task',
-          maxTokens: 2048,
-          topk: 40,
-          temperature: 0.8
-        });
-        selectedModel.value = 'gemma3-270m';
-        console.log('Android: Using Gemma 3 270M model');
-      } else if (platform === 'ios') {
-        // Default to Apple Intelligence on iOS
+      if (platform === 'ios') {
         selectedModel.value = 'apple-intelligence';
+        await CapgoLLM.setModel({ path: 'Apple Intelligence' });
+        await initializeChat();
+        setConversationIntro('Apple Intelligence is ready. Ask anything.');
         console.log('iOS: Using Apple Intelligence (default)');
+      } else if (platform === 'android') {
+        selectedModel.value = 'gemma4-e2b-download';
+        readinessStatus.value = 'not_ready';
+        setConversationIntro('Select a Gemma 4 LiteRT-LM model from the Model menu to start chatting.');
       }
     } catch (modelError) {
       console.warn('Model setup error (using defaults):', modelError);
     }
-    
-    // Initialize chat
-    await initializeChat();
-    
+
     // Set up listener for AI responses
     const textFromAiListener = await CapgoLLM.addListener('textFromAi', handleAiResponse);
     const aiFinishedListener = await CapgoLLM.addListener('aiFinished', handleAiFinished);
@@ -883,4 +869,3 @@ ion-footer ion-toolbar {
   align-items: center;
 }
 </style>
-

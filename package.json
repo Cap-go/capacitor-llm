@@ -32,9 +32,12 @@
     "llm",
     "local",
     "gemma",
+    "gemma4",
     "gemma3",
     "gemma3-270m",
     "gemma2-2b",
+    "litert",
+    "litert-lm",
     "apple-intelligence",
     "gpt"
   ],

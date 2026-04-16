@@ -23,8 +23,9 @@ export interface LLMPlugin {
 
   /**
    * Sets the model configuration
-   * - iOS: Use "Apple Intelligence" as path for system model, or provide path to MediaPipe model
-   * - Android: Path to a MediaPipe model file (in assets or files directory)
+   * - iOS: Use "Apple Intelligence" as path for the system model, or provide a MediaPipe custom model
+   * - Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
+   * - Web: Provide a MediaPipe `.task` model
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
    */
@@ -124,7 +125,7 @@ export interface AiFinishedEvent {
 export interface DownloadModelOptions {
   /** URL of the model file to download */
   url: string;
-  /** Optional: URL of companion file (e.g., .litertlm for Android) */
+  /** Optional: URL of a companion file for legacy model formats */
   companionUrl?: string;
   /** Optional: Custom filename (defaults to filename from URL) */
   filename?: string;
@@ -164,9 +165,9 @@ export interface ReadinessChangeEvent {
  * Model configuration options
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for iOS system model */
+  /** Model path or "Apple Intelligence" for the iOS system model */
   path: string;
-  /** Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path. */
+  /** Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. */
   modelType?: string;
   /** Maximum number of tokens the model handles */
   maxTokens?: number;
