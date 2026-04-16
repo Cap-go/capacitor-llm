@@ -11,6 +11,7 @@ import com.google.ai.edge.litertlm.Message;
 import com.google.ai.edge.litertlm.SamplerConfig;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions;
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -370,20 +371,20 @@ public class LLM {
 
     private void sendMessageWithMediaPipe(String chatId, String message, ChatSession session, MessageCallback callback) {
         executor.execute(() -> {
+            LlmInferenceSession inferenceSession = null;
             try {
                 session.addMessage("user", message);
 
                 String fullPrompt = session.buildPrompt();
                 android.util.Log.d("LLM", "Full prompt: " + fullPrompt);
 
-                com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions sessionOptions =
-                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
-                        .setTopK(topk)
-                        .setTemperature(temperature)
-                        .build();
+                LlmInferenceSession.LlmInferenceSessionOptions sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
+                    .setTopK(topk)
+                    .setTemperature(temperature)
+                    .build();
 
-                com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession inferenceSession =
-                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.createFromOptions(llmInference, sessionOptions);
+                inferenceSession = LlmInferenceSession.createFromOptions(llmInference, sessionOptions);
+                LlmInferenceSession activeSession = inferenceSession;
 
                 inferenceSession.addQueryChunk(fullPrompt);
 
@@ -440,18 +441,14 @@ public class LLM {
                             if (done) {
                                 session.addMessage("assistant", fullResponse.toString());
                                 callback.onComplete(chatId);
-
-                                try {
-                                    inferenceSession.close();
-                                } catch (Exception exception) {
-                                    android.util.Log.e("LLM", "Failed to close MediaPipe session", exception);
-                                }
+                                closeMediaPipeSession(activeSession);
                             }
                         }
                     };
 
                 inferenceSession.generateResponseAsync(resultListener);
             } catch (Exception exception) {
+                closeMediaPipeSession(inferenceSession);
                 callback.onError(exception.getMessage());
             }
         });
@@ -478,6 +475,16 @@ public class LLM {
                 loadedEngine.close();
             } catch (Exception exception) {
                 android.util.Log.w("LLM", "Failed to close LiteRT-LM engine", exception);
+            }
+        }
+    }
+
+    private void closeMediaPipeSession(LlmInferenceSession inferenceSession) {
+        if (inferenceSession != null) {
+            try {
+                inferenceSession.close();
+            } catch (Exception exception) {
+                android.util.Log.e("LLM", "Failed to close MediaPipe session", exception);
             }
         }
     }
