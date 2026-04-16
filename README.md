@@ -11,6 +11,8 @@ Adds support for LLM locally run for Capacitor
 
 It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android
 
+**Mac Catalyst:** Native iOS functionality is disabled for Mac Catalyst builds. MediaPipe pods are skipped and native calls will return an unsupported response; use an iOS/iPadOS target for native features.
+
 ## Documentation
 
 The most complete doc is available here: https://capgo.app/docs/plugins/llm/

@@ -5,7 +5,7 @@ import FoundationModels
 #endif
 // For CocoaPods, MediaPipeTasksGenAI should always be available
 // For SPM, we need conditional import when SPM support is added
-#if canImport(MediaPipeTasksGenAI)
+#if canImport(MediaPipeTasksGenAI) && !targetEnvironment(macCatalyst)
 import MediaPipeTasksGenAI
 #endif
 
@@ -17,6 +17,9 @@ import MediaPipeTasksGenAI
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private let pluginVersion: String = "8.0.10"
+    #if targetEnvironment(macCatalyst)
+    private let catalystNotSupportedMessage = "CapgoLLM is not available on Mac Catalyst. Use an iOS/iPadOS target instead."
+    #endif
     public let identifier = "LLMPlugin"
     public let jsName = "CapgoLLM"
     public var pluginMethods: [CAPPluginMethod] = [
@@ -49,7 +52,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var appleChats: [String: Any] = [:]
     #endif
 
-    #if COCOAPODS || canImport(MediaPipeTasksGenAI)
+    #if !targetEnvironment(macCatalyst) && (COCOAPODS || canImport(MediaPipeTasksGenAI))
     private var llmInference: LlmInference?
     #endif
 
@@ -58,6 +61,11 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Path is required")
             return
         }
+
+        #if targetEnvironment(macCatalyst)
+        call.reject(catalystNotSupportedMessage)
+        return
+        #endif
 
         print("[CapgoLLM] Setting model path: \(path)")
 
@@ -80,7 +88,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        #if canImport(MediaPipeTasksGenAI)
+        #if !targetEnvironment(macCatalyst) && canImport(MediaPipeTasksGenAI)
         Task {
             do {
                 let modelURL: URL
@@ -151,11 +159,16 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
         #else
-        call.reject("MediaPipe is not available. Please install via CocoaPods.")
+        call.reject("MediaPipe is not available on this platform. Please install via CocoaPods on iOS.")
         #endif
     }
 
     @objc func createChat(_ call: CAPPluginCall) {
+        #if targetEnvironment(macCatalyst)
+        call.reject(catalystNotSupportedMessage)
+        return
+        #endif
+
         print("[CapgoLLM] Creating chat with model type: \(currentModelType)")
         switch currentModelType {
         case .appleIntelligence:
@@ -176,7 +189,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .mediaPipe:
-            #if COCOAPODS || canImport(MediaPipeTasksGenAI)
+            #if !targetEnvironment(macCatalyst) && (COCOAPODS || canImport(MediaPipeTasksGenAI))
             guard llmInference != nil else {
                 print("[CapgoLLM] Error: Model not loaded when creating chat")
                 call.reject("Model not loaded")
@@ -190,12 +203,18 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 "id": id
             ])
             #else
-            call.reject("MediaPipe is not available. Please install via CocoaPods.")
+            call.reject("MediaPipe is not available on this platform. Please install via CocoaPods on iOS.")
             #endif
         }
     }
 
     @objc func getReadiness(_ call: CAPPluginCall) {
+        #if targetEnvironment(macCatalyst)
+        call.resolve(["readiness": "unsupported_on_maccatalyst"])
+        notifyListeners("readinessChange", data: ["readiness": "unsupported_on_maccatalyst"])
+        return
+        #endif
+
         let readiness = getReadinessStatus()
         call.resolve(["readiness": readiness])
         // Also notify listeners
@@ -232,6 +251,11 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     @objc func sendMessage(_ call: CAPPluginCall) {
+        #if targetEnvironment(macCatalyst)
+        call.reject(catalystNotSupportedMessage)
+        return
+        #endif
+
         let chatId = call.getString("chatId", "")
         guard let message = call.getString("message") else {
             call.reject("message not found")
@@ -318,7 +342,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .mediaPipe:
-            #if COCOAPODS || canImport(MediaPipeTasksGenAI)
+            #if !targetEnvironment(macCatalyst) && (COCOAPODS || canImport(MediaPipeTasksGenAI))
             guard let inference = llmInference else {
                 call.reject("Model not loaded")
                 return
@@ -358,7 +382,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
             #else
-            call.reject("MediaPipe is not available. Please install via CocoaPods.")
+            call.reject("MediaPipe is not available on this platform. Please install via CocoaPods on iOS.")
             #endif
         }
     }
