@@ -9,7 +9,14 @@
 
 Adds support for LLM locally run for Capacitor
 
-It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android
+It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android.
+
+## MediaPipe Deprecation (Mobile) & LiteRT-LM Roadmap
+
+- Google is deprecating the MediaPipe LLM Inference API on **Android and iOS** in favor of [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM). The MediaPipe **web** package remains supported.
+- This plugin **still uses MediaPipe for mobile today**; web stays on MediaPipe because it is not deprecated.
+- Migration plan: short-term keep MediaPipe working, medium-term migrate Android to LiteRT-LM, longer-term migrate iOS when stable APIs are available.
+- If you are evaluating production mobile deployments, track LiteRT-LM readiness and plan for model format changes.
 
 ## Documentation
 
