@@ -16,9 +16,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -51,7 +51,7 @@ public class LLM {
 
     private LLM(Context context) {
         this.context = context;
-        this.chatSessions = new HashMap<>();
+        this.chatSessions = new ConcurrentHashMap<>();
         this.executor = Executors.newSingleThreadExecutor();
     }
 
@@ -137,6 +137,7 @@ public class LLM {
                 } else {
                     LlmInference loadedInference = initializeMediaPipeModel(actualPath, request);
                     if (!isCurrentLoad(request.loadId)) {
+                        closeLlmInference(loadedInference);
                         notifySupersededLoad(callback);
                         return;
                     }
@@ -267,7 +268,7 @@ public class LLM {
         }
     }
 
-    public String createChat() {
+    public synchronized String createChat() {
         if (!isReady) {
             throw new IllegalStateException("Model not ready");
         }
@@ -306,13 +307,24 @@ public class LLM {
     }
 
     public void sendMessage(String chatId, String message, MessageCallback callback) {
-        ChatSession session = chatSessions.get(chatId);
-        if (session == null) {
-            throw new IllegalStateException("Chat session not found");
-        }
+        ChatSession session;
+        LlmInference inference;
+        Integer sessionTopk;
+        Float sessionTemperature;
 
-        if (!isReady) {
-            throw new IllegalStateException("Model not ready");
+        synchronized (this) {
+            session = chatSessions.get(chatId);
+            if (session == null) {
+                throw new IllegalStateException("Chat session not found");
+            }
+
+            if (!isReady) {
+                throw new IllegalStateException("Model not ready");
+            }
+
+            inference = llmInference;
+            sessionTopk = topk;
+            sessionTemperature = temperature;
         }
 
         if (session.backendType == BackendType.LITERT) {
@@ -320,11 +332,11 @@ public class LLM {
             return;
         }
 
-        if (llmInference == null) {
+        if (inference == null) {
             throw new IllegalStateException("MediaPipe model not ready");
         }
 
-        sendMessageWithMediaPipe(chatId, message, session, callback);
+        sendMessageWithMediaPipe(chatId, message, session, inference, sessionTopk, sessionTemperature, callback);
     }
 
     private void sendMessageWithLiteRt(String chatId, String message, ChatSession session, MessageCallback callback) {
@@ -369,7 +381,15 @@ public class LLM {
         return builder.toString();
     }
 
-    private void sendMessageWithMediaPipe(String chatId, String message, ChatSession session, MessageCallback callback) {
+    private void sendMessageWithMediaPipe(
+        String chatId,
+        String message,
+        ChatSession session,
+        LlmInference inference,
+        Integer sessionTopk,
+        Float sessionTemperature,
+        MessageCallback callback
+    ) {
         executor.execute(() -> {
             LlmInferenceSession inferenceSession = null;
             try {
@@ -379,11 +399,11 @@ public class LLM {
                 android.util.Log.d("LLM", "Full prompt: " + fullPrompt);
 
                 LlmInferenceSession.LlmInferenceSessionOptions sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
-                    .setTopK(topk)
-                    .setTemperature(temperature)
+                    .setTopK(sessionTopk)
+                    .setTemperature(sessionTemperature)
                     .build();
 
-                inferenceSession = LlmInferenceSession.createFromOptions(llmInference, sessionOptions);
+                inferenceSession = LlmInferenceSession.createFromOptions(inference, sessionOptions);
                 LlmInferenceSession activeSession = inferenceSession;
 
                 inferenceSession.addQueryChunk(fullPrompt);
@@ -454,14 +474,15 @@ public class LLM {
         });
     }
 
-    public String getReadiness() {
+    public synchronized String getReadiness() {
         return isReady ? "ready" : "not_ready";
     }
 
-    private void resetModelState() {
+    private synchronized void resetModelState() {
         clearChatSessions();
 
         closeEngine(engine);
+        closeLlmInference(llmInference);
         engine = null;
         llmInference = null;
         modelPath = null;
@@ -485,6 +506,16 @@ public class LLM {
                 inferenceSession.close();
             } catch (Exception exception) {
                 android.util.Log.e("LLM", "Failed to close MediaPipe session", exception);
+            }
+        }
+    }
+
+    private void closeLlmInference(LlmInference inference) {
+        if (inference != null) {
+            try {
+                inference.close();
+            } catch (Exception exception) {
+                android.util.Log.w("LLM", "Failed to close MediaPipe model", exception);
             }
         }
     }
