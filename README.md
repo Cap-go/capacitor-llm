@@ -108,6 +108,7 @@ No additional setup needed. The plugin will automatically use Apple Intelligence
 #### Using Custom Models on iOS via MediaPipe
 
 **⚠️ IMPORTANT**: While MediaPipe documentation states Gemma-2 2B works on all platforms, iOS implementation has compatibility issues with `.task` format models, often resulting in `(prefill_input_names.size() % 2)==(0)` errors.
+Google is also deprecating the MediaPipe LLM Inference API on iOS; LiteRT-LM migration will be evaluated when stable Swift/C++ APIs are available.
 
 ## Model Compatibility Guide
 
@@ -171,6 +172,7 @@ const chat = await CapgoLLM.createChat();
 ### Android
 
 For Android, you need to include a compatible LLM model in your app. The plugin uses MediaPipe's tasks-genai, which supports various model formats.
+Google is deprecating MediaPipe LLM Inference for Android; LiteRT-LM migration is planned once stable mobile APIs are available.
 
 When Gemini mini will be out of close alpha we might add it as default like we do Apple intelligence default
 https://developer.android.com/ai/gemini-nano/experimental

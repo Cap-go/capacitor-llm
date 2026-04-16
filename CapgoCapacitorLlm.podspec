@@ -13,6 +13,7 @@ Pod::Spec.new do |s|
   s.source_files = 'ios/Sources/**/*.{swift,h,m,c,cc,mm,cpp}'
   s.ios.deployment_target = '15.0'
   s.dependency 'Capacitor'
+  # MediaPipe LLM Inference is deprecated on mobile; keep pods until LiteRT-LM migration path is ready
   s.dependency 'MediaPipeTasksGenAI'
   s.dependency 'MediaPipeTasksGenAIC'
   s.swift_version = '5.1'

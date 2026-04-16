@@ -2,6 +2,8 @@
 
 This example app demonstrates how to use the @capgo/capacitor-llm plugin in a real application.
 
+> Upstream notice: Google is deprecating the MediaPipe LLM Inference API on **Android and iOS** in favor of [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM). This example still uses MediaPipe on mobile today; LiteRT-LM support will be adopted once stable SDKs are available. The web backend remains on MediaPipe because it is not deprecated.
+
 ## Prerequisites
 
 - Node.js and npm/bun installed

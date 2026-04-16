@@ -23,8 +23,8 @@ export interface LLMPlugin {
 
   /**
    * Sets the model configuration
-   * - iOS: Use "Apple Intelligence" as path for system model, or provide path to MediaPipe model
-   * - Android: Path to a MediaPipe model file (in assets or files directory)
+   * - iOS: Use "Apple Intelligence" as path for system model, or provide path to a MediaPipe model (MediaPipe mobile is deprecated upstream; LiteRT-LM migration is planned)
+   * - Android: Path to a MediaPipe model file (in assets or files directory) while LiteRT-LM support is being evaluated
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
    */
@@ -164,7 +164,7 @@ export interface ReadinessChangeEvent {
  * Model configuration options
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for iOS system model */
+  /** Model path or "Apple Intelligence" for iOS system model. Mobile backends currently expect MediaPipe model formats while LiteRT-LM migration is in progress. */
   path: string;
   /** Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path. */
   modelType?: string;

@@ -52,6 +52,7 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    // MediaPipe LLM Inference is deprecated on mobile; keep current dependency while LiteRT-LM migration is evaluated
     implementation 'com.google.mediapipe:tasks-genai:0.10.24'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
