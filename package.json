@@ -78,7 +78,7 @@
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0",
-    "@mediapipe/tasks-genai": "^0.10.24"
+    "@mediapipe/tasks-genai": "^0.10.27"
   },
   "prettier": "@ionic/prettier-config",
   "swiftlint": "@ionic/swiftlint-config",

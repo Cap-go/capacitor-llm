@@ -78,7 +78,7 @@ MediaPipe GenAI does not officially support SPM yet (see [MediaPipe issue #5464]
 1. Open your app project in Xcode
 2. Go to **File > Add Package Dependencies...**
 3. Enter the URL: `https://github.com/paescebu/SwiftTasksGenAI.git`
-4. Select your desired version (e.g., 0.10.24)
+4. Select your desired version (e.g., 0.10.27)
 5. Add the `SwiftTasksGenAI` product to your app target
 
 **Note:** SwiftTasksGenAI uses unsafe build flags, which means it cannot be added directly in Package.swift files, but works fine when added through Xcode's UI. This is the same approach used by SwiftTasksVision.
