@@ -54,11 +54,14 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       throw new Error(`Chat session ${options.chatId} is not active`);
     }
 
+    let hasStreamed = false;
+
     try {
       // Generate response using MediaPipe GenAI streaming API
       const response = session.llm.generateResponseStream(options.message);
 
       for await (const partialResponse of response) {
+        hasStreamed = true;
         // Send incremental text
         this.notifyListeners('textFromAi', {
           text: partialResponse,
@@ -73,10 +76,15 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       } as AiFinishedEvent);
     } catch (error) {
       console.error('Error generating response:', error);
-      this.notifyListeners('generationError', {
-        chatId: options.chatId,
-        error: error instanceof Error ? error.message : String(error),
-      } as GenerationErrorEvent);
+      const message = error instanceof Error ? error.message : String(error);
+      if (hasStreamed) {
+        this.notifyListeners('generationError', {
+          chatId: options.chatId,
+          error: message,
+        } as GenerationErrorEvent);
+        return;
+      }
+
       throw error;
     }
   }

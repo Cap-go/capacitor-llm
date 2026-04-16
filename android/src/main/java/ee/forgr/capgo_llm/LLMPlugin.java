@@ -104,7 +104,7 @@ public class LLMPlugin extends Plugin {
         Integer maxTokens = call.getInt("maxTokens", 2048);
         Integer topk = call.getInt("topk", 40);
         Float temperature = call.getFloat("temperature", 0.8f);
-        Integer randomSeed = call.getInt("randomSeed", 101);
+        Integer randomSeed = call.getInt("randomSeed", 0);
         String modelType = call.getString("modelType");
 
         llm.setModel(

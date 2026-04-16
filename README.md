@@ -368,15 +368,16 @@ Get the native Capacitor plugin version.
 #### ModelOptions
 
 Model configuration options
+Only `path` is required. All other properties are optional overrides.
 
-| Prop              | Type                | Description                                                                                                           |
-| ----------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for the iOS system model                                                           |
-| **`modelType`**   | <code>string</code> | Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. |
-| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                            |
-| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                     |
-| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                          |
-| **`randomSeed`**  | <code>number</code> | Random seed for generation                                                                                            |
+| Prop              | Type                | Description                                                                                                                     |
+| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for the Apple system model on iOS                                                            |
+| **`modelType`**   | <code>string</code> | Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. |
+| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                                      |
+| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                               |
+| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                                    |
+| **`randomSeed`**  | <code>number</code> | Optional. Random seed for generation.                                                                                           |
 
 
 #### DownloadModelResult
@@ -392,6 +393,7 @@ Result of model download
 #### DownloadModelOptions
 
 Options for downloading a model
+Only `url` is required. `companionUrl` and `filename` are optional.
 
 | Prop               | Type                | Description                                                |
 | ------------------ | ------------------- | ---------------------------------------------------------- |
@@ -423,11 +425,12 @@ Event data for AI completion
 #### GenerationErrorEvent
 
 Event data for generation failures
+`chatId` is optional and may be omitted when the failure is not tied to a specific chat.
 
-| Prop         | Type                | Description                                     |
-| ------------ | ------------------- | ----------------------------------------------- |
-| **`chatId`** | <code>string</code> | The chat session ID that failed, when available |
-| **`error`**  | <code>string</code> | Error message describing the failure            |
+| Prop         | Type                | Description                                                |
+| ------------ | ------------------- | ---------------------------------------------------------- |
+| **`chatId`** | <code>string</code> | Optional. The chat session ID that failed, when available. |
+| **`error`**  | <code>string</code> | Error message describing the failure                       |
 
 
 #### DownloadProgressEvent

@@ -132,9 +132,10 @@ export interface AiFinishedEvent {
 
 /**
  * Event data for generation failures
+ * `chatId` is optional and may be omitted when the failure is not tied to a specific chat.
  */
 export interface GenerationErrorEvent {
-  /** The chat session ID that failed, when available */
+  /** Optional. The chat session ID that failed, when available. */
   chatId?: string;
   /** Error message describing the failure */
   error: string;
@@ -142,6 +143,7 @@ export interface GenerationErrorEvent {
 
 /**
  * Options for downloading a model
+ * Only `url` is required. `companionUrl` and `filename` are optional.
  */
 export interface DownloadModelOptions {
   /** URL of the model file to download */
@@ -184,11 +186,12 @@ export interface ReadinessChangeEvent {
 
 /**
  * Model configuration options
+ * Only `path` is required. All other properties are optional overrides.
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for the iOS system model */
+  /** Model path or "Apple Intelligence" for the Apple system model on iOS */
   path: string;
-  /** Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. */
+  /** Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. */
   modelType?: string;
   /** Maximum number of tokens the model handles */
   maxTokens?: number;
@@ -196,6 +199,6 @@ export interface ModelOptions {
   topk?: number;
   /** Amount of randomness in generation (0.0-1.0) */
   temperature?: number;
-  /** Random seed for generation */
+  /** Optional. Random seed for generation. */
   randomSeed?: number;
 }
