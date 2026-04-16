@@ -216,15 +216,31 @@ public class LLM {
 
     private String normalizeModelType(String path, String modelType) {
         if (modelType != null && !modelType.isBlank()) {
-            return modelType.toLowerCase();
+            return stripUrlSuffix(modelType).toLowerCase();
         }
 
-        int extensionIndex = path.lastIndexOf('.');
-        if (extensionIndex == -1 || extensionIndex == path.length() - 1) {
+        String normalizedPath = stripUrlSuffix(path);
+        int extensionIndex = normalizedPath.lastIndexOf('.');
+        if (extensionIndex == -1 || extensionIndex == normalizedPath.length() - 1) {
             return "";
         }
 
-        return path.substring(extensionIndex + 1).toLowerCase();
+        return normalizedPath.substring(extensionIndex + 1).toLowerCase();
+    }
+
+    private String stripUrlSuffix(String value) {
+        int cutoff = value.length();
+        int queryIndex = value.indexOf('?');
+        int fragmentIndex = value.indexOf('#');
+
+        if (queryIndex >= 0 && queryIndex < cutoff) {
+            cutoff = queryIndex;
+        }
+        if (fragmentIndex >= 0 && fragmentIndex < cutoff) {
+            cutoff = fragmentIndex;
+        }
+
+        return value.substring(0, cutoff);
     }
 
     private String resolveModelPath(String path, BackendType backendType) throws Exception {
