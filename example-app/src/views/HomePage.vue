@@ -88,6 +88,7 @@
             slot="end"
             fill="solid"
             shape="round"
+            aria-label="Send message"
             @click="sendMessage"
             :disabled="!canSendMessage"
             class="send-button"
@@ -320,6 +321,26 @@ const setConversationIntro = (text: string) => {
   isThinking.value = false;
 };
 
+const cloneMessages = () => messages.value.map((message) => ({
+  ...message,
+  timestamp: new Date(message.timestamp),
+}));
+
+const restoreConversationState = (
+  snapshotMessages: Message[],
+  snapshotRawMessages: Map<number, string>,
+  snapshotMessageIdCounter: number,
+) => {
+  messages.value = snapshotMessages;
+  rawMessages.clear();
+  snapshotRawMessages.forEach((value, key) => {
+    rawMessages.set(key, value);
+  });
+  messageIdCounter = snapshotMessageIdCounter;
+  currentAiMessageId.value = null;
+  isThinking.value = false;
+};
+
 const isTypingComplete = (message: Message) => {
   return message.isComplete !== false;
 };
@@ -466,6 +487,39 @@ const handleGenerationError = (event: GenerationErrorEvent) => {
   isThinking.value = false;
 };
 
+const applyModel = async (model: Model) => {
+  if (model.id === 'apple-intelligence') {
+    await CapgoLLM.setModel({ path: 'Apple Intelligence' });
+    return;
+  }
+
+  const path = model.downloadedPath || model.path;
+  if (!path) {
+    throw new Error('Model path is not available yet');
+  }
+
+  await CapgoLLM.setModel({
+    path,
+    modelType: model.modelType,
+    maxTokens: model.maxTokens,
+    topk: 40,
+    temperature: 0.8
+  });
+};
+
+const getModelById = (id: string) => availableModels.value.find((model) => model.id === id);
+
+const restorePreviousModel = async (modelId: string) => {
+  const previousModel = getModelById(modelId);
+  if (!previousModel) {
+    chatId.value = '';
+    return;
+  }
+
+  await applyModel(previousModel);
+  await initializeChat();
+};
+
 const downloadModel = async (model: Model) => {
   if (!model.needsDownload || !model.url) return;
   
@@ -497,35 +551,37 @@ const downloadModel = async (model: Model) => {
 };
 
 const selectModel = async (model: Model) => {
+  const previousSelectedModel = selectedModel.value;
+  const snapshotMessages = cloneMessages();
+  const snapshotRawMessages = new Map(rawMessages);
+  const snapshotMessageIdCounter = messageIdCounter;
+
   try {
-    selectedModel.value = model.id;
-
-    chatId.value = '';
-    setConversationIntro(`Preparing ${model.name}...`);
-
-    if (model.id === 'apple-intelligence') {
-      await CapgoLLM.setModel({ path: 'Apple Intelligence' });
-    } else if (model.downloadedPath || !model.needsDownload) {
-      await CapgoLLM.setModel({
-        path: model.downloadedPath || model.path || '',
-        modelType: model.modelType,
-        maxTokens: model.maxTokens,
-        topk: 40,
-        temperature: 0.8
-      });
-    } else {
+    if (model.needsDownload && !model.downloadedPath) {
       // Need to download first
       await downloadModel(model);
       return;
     }
-    
-    // Recreate chat
+
+    await applyModel(model);
     await initializeChat();
+    selectedModel.value = model.id;
     setConversationIntro(`${model.name} is ready. Ask anything.`);
     showModelSelector.value = false;
-    
   } catch (error) {
     console.error('Error selecting model:', error);
+    restoreConversationState(snapshotMessages, snapshotRawMessages, snapshotMessageIdCounter);
+    selectedModel.value = previousSelectedModel;
+
+    if (previousSelectedModel) {
+      try {
+        await restorePreviousModel(previousSelectedModel);
+      } catch (restoreError) {
+        console.error('Error restoring previous model:', restoreError);
+        chatId.value = '';
+      }
+    }
+
     alert(`Failed to load model: ${error}`);
   }
 };

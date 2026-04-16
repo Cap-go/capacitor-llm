@@ -41,6 +41,7 @@ public class LLM {
     private String modelPath = null;
     private String modelType = null;
     private BackendType activeBackend = BackendType.LITERT;
+    private long currentLoadId = 0L;
 
     private Integer maxTokens = 2048;
     private Integer topk = 40;
@@ -69,33 +70,43 @@ public class LLM {
         Integer randomSeed,
         ModelLoadCallback callback
     ) {
-        this.modelPath = path;
-        this.modelType = modelType;
-        this.maxTokens = maxTokens;
-        this.topk = topk;
-        this.temperature = temperature;
-        this.randomSeed = randomSeed;
-
+        ModelLoadRequest request = nextLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed);
         resetModelState();
 
         android.util.Log.d(
             "LLM",
             "setModel called with path: " +
-                path +
+                request.modelPath +
                 ", modelType: " +
-                modelType +
+                request.modelType +
                 ", maxTokens: " +
-                maxTokens +
+                request.maxTokens +
                 ", topk: " +
-                topk +
+                request.topk +
                 ", temperature: " +
-                temperature
+                request.temperature
         );
-        initializeModel(callback);
+        initializeModel(request, callback);
     }
 
-    private void initializeModel(ModelLoadCallback callback) {
-        if (modelPath == null) {
+    private synchronized ModelLoadRequest nextLoadRequest(
+        String path,
+        String modelType,
+        Integer maxTokens,
+        Integer topk,
+        Float temperature,
+        Integer randomSeed
+    ) {
+        currentLoadId += 1;
+        return new ModelLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, currentLoadId);
+    }
+
+    private synchronized boolean isCurrentLoad(long loadId) {
+        return loadId == currentLoadId;
+    }
+
+    private void initializeModel(ModelLoadRequest request, ModelLoadCallback callback) {
+        if (request.modelPath == null) {
             if (callback != null) {
                 callback.onError("Model path not set");
             }
@@ -104,23 +115,42 @@ public class LLM {
 
         executor.execute(() -> {
             try {
-                activeBackend = resolveBackend(modelPath, modelType);
-                String actualPath = resolveModelPath(modelPath, activeBackend);
-
-                android.util.Log.d("LLM", "Resolved model path: " + actualPath + " using backend: " + activeBackend);
-
-                if (activeBackend == BackendType.LITERT) {
-                    initializeLiteRtModel(actualPath);
-                } else {
-                    initializeMediaPipeModel(actualPath);
+                if (!isCurrentLoad(request.loadId)) {
+                    notifySupersededLoad(callback);
+                    return;
                 }
 
-                isReady = true;
+                BackendType backend = resolveBackend(request.modelPath, request.modelType);
+                String actualPath = resolveModelPath(request.modelPath, backend);
+
+                android.util.Log.d("LLM", "Resolved model path: " + actualPath + " using backend: " + backend);
+
+                if (backend == BackendType.LITERT) {
+                    Engine loadedEngine = initializeLiteRtModel(actualPath, request);
+                    if (!isCurrentLoad(request.loadId)) {
+                        closeEngine(loadedEngine);
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+                    applyLoadedModel(request, backend, loadedEngine, null);
+                } else {
+                    LlmInference loadedInference = initializeMediaPipeModel(actualPath, request);
+                    if (!isCurrentLoad(request.loadId)) {
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+                    applyLoadedModel(request, backend, null, loadedInference);
+                }
 
                 if (callback != null) {
                     callback.onSuccess();
                 }
             } catch (Exception exception) {
+                if (!isCurrentLoad(request.loadId)) {
+                    notifySupersededLoad(callback);
+                    return;
+                }
+
                 android.util.Log.e("LLM", "Failed to initialize model", exception);
                 resetModelState();
 
@@ -131,26 +161,51 @@ public class LLM {
         });
     }
 
-    private void initializeLiteRtModel(String actualPath) {
+    private void notifySupersededLoad(ModelLoadCallback callback) {
+        if (callback != null) {
+            callback.onError("Model load was superseded by a newer request");
+        }
+    }
+
+    private synchronized void applyLoadedModel(
+        ModelLoadRequest request,
+        BackendType backend,
+        Engine loadedEngine,
+        LlmInference loadedInference
+    ) {
+        modelPath = request.modelPath;
+        modelType = request.modelType;
+        maxTokens = request.maxTokens;
+        topk = request.topk;
+        temperature = request.temperature;
+        randomSeed = request.randomSeed;
+        activeBackend = backend;
+        engine = loadedEngine;
+        llmInference = loadedInference;
+        isReady = true;
+    }
+
+    private Engine initializeLiteRtModel(String actualPath, ModelLoadRequest request) {
         EngineConfig config = new EngineConfig(
             actualPath,
             new Backend.CPU(),
             new Backend.CPU(),
             new Backend.CPU(),
-            maxTokens,
+            request.maxTokens,
             context.getCacheDir().getAbsolutePath()
         );
-        engine = new Engine(config);
-        engine.initialize();
+        Engine loadedEngine = new Engine(config);
+        loadedEngine.initialize();
+        return loadedEngine;
     }
 
-    private void initializeMediaPipeModel(String actualPath) {
+    private LlmInference initializeMediaPipeModel(String actualPath, ModelLoadRequest request) {
         LlmInferenceOptions options = LlmInferenceOptions.builder()
             .setModelPath(actualPath)
-            .setMaxTokens(maxTokens)
-            .setMaxTopK(topk)
+            .setMaxTokens(request.maxTokens)
+            .setMaxTopK(request.topk)
             .build();
-        llmInference = LlmInference.createFromOptions(context, options);
+        return LlmInference.createFromOptions(context, options);
     }
 
     private BackendType resolveBackend(String path, String modelType) {
@@ -318,7 +373,7 @@ public class LLM {
             try {
                 session.addMessage("user", message);
 
-                String fullPrompt = session.buildPrompt(message);
+                String fullPrompt = session.buildPrompt();
                 android.util.Log.d("LLM", "Full prompt: " + fullPrompt);
 
                 com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions sessionOptions =
@@ -409,17 +464,22 @@ public class LLM {
     private void resetModelState() {
         clearChatSessions();
 
-        if (engine != null) {
+        closeEngine(engine);
+        engine = null;
+        llmInference = null;
+        modelPath = null;
+        modelType = null;
+        isReady = false;
+    }
+
+    private void closeEngine(Engine loadedEngine) {
+        if (loadedEngine != null) {
             try {
-                engine.close();
+                loadedEngine.close();
             } catch (Exception exception) {
                 android.util.Log.w("LLM", "Failed to close LiteRT-LM engine", exception);
             }
-            engine = null;
         }
-
-        llmInference = null;
-        isReady = false;
     }
 
     private void clearChatSessions() {
@@ -478,8 +538,37 @@ public class LLM {
             }
         }
 
-        String buildPrompt(String newMessage) {
-            return newMessage;
+        String buildPrompt() {
+            return history.toString();
+        }
+    }
+
+    private static class ModelLoadRequest {
+
+        private final String modelPath;
+        private final String modelType;
+        private final Integer maxTokens;
+        private final Integer topk;
+        private final Float temperature;
+        private final Integer randomSeed;
+        private final long loadId;
+
+        private ModelLoadRequest(
+            String modelPath,
+            String modelType,
+            Integer maxTokens,
+            Integer topk,
+            Float temperature,
+            Integer randomSeed,
+            long loadId
+        ) {
+            this.modelPath = modelPath;
+            this.modelType = modelType;
+            this.maxTokens = maxTokens;
+            this.topk = topk;
+            this.temperature = temperature;
+            this.randomSeed = randomSeed;
+            this.loadId = loadId;
         }
     }
 }
