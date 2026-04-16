@@ -63,6 +63,17 @@ export interface LLMPlugin {
   ): Promise<{ remove: () => Promise<void> }>;
 
   /**
+   * Adds a listener for generation failures that happen after streaming starts
+   * @param eventName - Event name 'generationError'
+   * @param listenerFunc - Callback function for generation errors
+   * @returns Promise with remove function to unsubscribe
+   */
+  addListener(
+    eventName: 'generationError',
+    listenerFunc: (event: GenerationErrorEvent) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
+
+  /**
    * Adds a listener for model download progress events
    * @param eventName - Event name 'downloadProgress'
    * @param listenerFunc - Callback function for progress events
@@ -117,6 +128,16 @@ export interface TextFromAiEvent {
 export interface AiFinishedEvent {
   /** The chat session ID that finished */
   chatId: string;
+}
+
+/**
+ * Event data for generation failures
+ */
+export interface GenerationErrorEvent {
+  /** The chat session ID that failed, when available */
+  chatId?: string;
+  /** Error message describing the failure */
+  error: string;
 }
 
 /**

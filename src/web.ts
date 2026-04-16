@@ -8,6 +8,7 @@ import type {
   ModelOptions,
   TextFromAiEvent,
   AiFinishedEvent,
+  GenerationErrorEvent,
   DownloadProgressEvent,
   ReadinessChangeEvent,
 } from './definitions';
@@ -72,6 +73,10 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       } as AiFinishedEvent);
     } catch (error) {
       console.error('Error generating response:', error);
+      this.notifyListeners('generationError', {
+        chatId: options.chatId,
+        error: error instanceof Error ? error.message : String(error),
+      } as GenerationErrorEvent);
       throw error;
     }
   }

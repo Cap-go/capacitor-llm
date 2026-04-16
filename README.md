@@ -166,6 +166,7 @@ await CapgoLLM.sendMessage({
 * [`downloadModel(...)`](#downloadmodel)
 * [`addListener('textFromAi', ...)`](#addlistenertextfromai-)
 * [`addListener('aiFinished', ...)`](#addlisteneraifinished-)
+* [`addListener('generationError', ...)`](#addlistenergenerationerror-)
 * [`addListener('downloadProgress', ...)`](#addlistenerdownloadprogress-)
 * [`addListener('readinessChange', ...)`](#addlistenerreadinesschange-)
 * [`getPluginVersion()`](#getpluginversion)
@@ -292,6 +293,24 @@ Adds a listener for AI completion events
 --------------------
 
 
+### addListener('generationError', ...)
+
+```typescript
+addListener(eventName: 'generationError', listenerFunc: (event: GenerationErrorEvent) => void) => Promise<{ remove: () => Promise<void>; }>
+```
+
+Adds a listener for generation failures that happen after streaming starts
+
+| Param              | Type                                                                                      | Description                               |
+| ------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------- |
+| **`eventName`**    | <code>'generationError'</code>                                                            | - Event name 'generationError'            |
+| **`listenerFunc`** | <code>(event: <a href="#generationerrorevent">GenerationErrorEvent</a>) =&gt; void</code> | - Callback function for generation errors |
+
+**Returns:** <code>Promise&lt;{ remove: () =&gt; Promise&lt;void&gt;; }&gt;</code>
+
+--------------------
+
+
 ### addListener('downloadProgress', ...)
 
 ```typescript
@@ -399,6 +418,16 @@ Event data for AI completion
 | Prop         | Type                | Description                       |
 | ------------ | ------------------- | --------------------------------- |
 | **`chatId`** | <code>string</code> | The chat session ID that finished |
+
+
+#### GenerationErrorEvent
+
+Event data for generation failures
+
+| Prop         | Type                | Description                                     |
+| ------------ | ------------------- | ----------------------------------------------- |
+| **`chatId`** | <code>string</code> | The chat session ID that failed, when available |
+| **`error`**  | <code>string</code> | Error message describing the failure            |
 
 
 #### DownloadProgressEvent

@@ -180,7 +180,7 @@ import {
 } from '@ionic/vue';
 import { send, settingsOutline, checkmarkCircle, cloudDownloadOutline, checkmarkDoneOutline, checkmarkOutline } from 'ionicons/icons';
 import { ref, nextTick, onMounted, onUnmounted, computed } from 'vue';
-import type { TextFromAiEvent, AiFinishedEvent } from '@capgo/capacitor-llm';
+import type { TextFromAiEvent, AiFinishedEvent, GenerationErrorEvent } from '@capgo/capacitor-llm';
 import { CapgoLLM } from '@capgo/capacitor-llm';
 import { marked } from 'marked';
 import { Capacitor } from '@capacitor/core';
@@ -449,6 +449,23 @@ const handleAiFinished = (event: AiFinishedEvent) => {
   isThinking.value = false;
 };
 
+const handleGenerationError = (event: GenerationErrorEvent) => {
+  if (event.chatId && event.chatId !== chatId.value) return;
+
+  const messageIndex = messages.value.findIndex(m => m.id === currentAiMessageId.value);
+  if (messageIndex !== -1) {
+    messages.value[messageIndex].text = `Sorry, I encountered an error. ${event.error}`;
+    messages.value[messageIndex].isComplete = true;
+  }
+
+  if (currentAiMessageId.value !== null) {
+    rawMessages.delete(currentAiMessageId.value);
+  }
+
+  currentAiMessageId.value = null;
+  isThinking.value = false;
+};
+
 const downloadModel = async (model: Model) => {
   if (!model.needsDownload || !model.url) return;
   
@@ -559,6 +576,7 @@ onMounted(async () => {
     // Set up listener for AI responses
     const textFromAiListener = await CapgoLLM.addListener('textFromAi', handleAiResponse);
     const aiFinishedListener = await CapgoLLM.addListener('aiFinished', handleAiFinished);
+    const generationErrorListener = await CapgoLLM.addListener('generationError', handleGenerationError);
     const downloadProgressListener = await CapgoLLM.addListener('downloadProgress', (event) => {
       downloadProgress.value = event.progress;
       console.log('Download progress:', event.progress);
@@ -566,6 +584,7 @@ onMounted(async () => {
     listenerRemove = async () => {
       await textFromAiListener.remove();
       await aiFinishedListener.remove();
+      await generationErrorListener.remove();
       await readinessListener.remove();
       await downloadProgressListener.remove();
     };

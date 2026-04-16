@@ -65,8 +65,9 @@ public class LLMPlugin extends Plugin {
                     @Override
                     public void onError(String error) {
                         JSObject event = new JSObject();
-                        event.put("readiness", "Failed to generate response: " + error);
-                        notifyListeners("readinessChange", event);
+                        event.put("chatId", chatId);
+                        event.put("error", error);
+                        notifyListeners("generationError", event);
                     }
                 }
             );

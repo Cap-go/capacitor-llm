@@ -275,95 +275,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    #if canImport(FoundationModels)
-    @available(iOS 26.0, *)
-    private func validateAppleAvailability(model: SystemLanguageModel, call: CAPPluginCall) -> Bool {
-        switch model.availability {
-        case .available:
-            return true
-        case .unavailable(.deviceNotEligible):
-            call.reject("error deviceNotEligible error")
-        case .unavailable(.appleIntelligenceNotEnabled):
-            call.reject("error appleIntelligenceNotEnabled error")
-        case .unavailable(.modelNotReady):
-            call.reject("error modelNotReady error")
-        case .unavailable(let other):
-            call.reject("error \(other) error")
-        }
-
-        return false
-    }
-
-    @available(iOS 26.0, *)
-    private func streamAppleResponse(chatId: String, message: String, chat: LanguageModelSession, call: CAPPluginCall) {
-        Task {
-            do {
-                let stream = chat.streamResponse(to: message)
-                for try await chunk in stream {
-                    let textChunk = extractAppleTextChunk(from: chunk)
-                    notifyListeners("textFromAi", data: [
-                        "chatId": chatId,
-                        "text": textChunk,
-                        "isChunk": true
-                    ])
-                }
-                notifyListeners("aiFinished", data: ["chatId": chatId])
-                call.resolve()
-            } catch {
-                call.reject("Failed to get response: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    @available(iOS 26.0, *)
-    private func extractAppleTextChunk(from chunk: Any) -> String {
-        let mirror = Mirror(reflecting: chunk)
-
-        if let contentProperty = mirror.children.first(where: { $0.label == "content" }),
-           let content = contentProperty.value as? String {
-            print("[CapgoLLM] Extracted content: \(content)")
-            return content
-        }
-
-        if let rawContentProperty = mirror.children.first(where: { $0.label == "rawContent" }),
-           let rawContent = rawContentProperty.value as? String {
-            print("[CapgoLLM] Extracted rawContent: \(rawContent)")
-            return rawContent
-        }
-
-        let fallback = "\(chunk)"
-        print("[CapgoLLM] Fallback to string conversion: \(fallback)")
-        return fallback
-    }
-    #endif
-
-    #if COCOAPODS || canImport(MediaPipeTasksGenAI)
-    private func streamMediaPipeResponse(chatId: String, message: String, inference: LlmInference, call: CAPPluginCall) {
-        Task {
-            do {
-                print("[CapgoLLM] Attempting to generate streaming response for message: \(message)")
-
-                let resultStream = inference.generateResponseAsync(inputText: message)
-
-                for try await partialResult in resultStream {
-                    print("[CapgoLLM] Partial result: \(partialResult)")
-                    notifyListeners("textFromAi", data: [
-                        "chatId": chatId,
-                        "text": partialResult,
-                        "isChunk": true
-                    ])
-                }
-
-                notifyListeners("aiFinished", data: ["chatId": chatId])
-                call.resolve()
-            } catch {
-                print("[CapgoLLM] Error details: \(error)")
-                call.reject("Failed to generate response: \(error.localizedDescription)")
-            }
-        }
-    }
-    #endif
-
     @objc func downloadModel(_ call: CAPPluginCall) {
         guard let urlString = call.getString("url") else {
             call.reject("URL is required")
@@ -443,6 +354,107 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["version": self.pluginVersion])
     }
 }
+
+#if canImport(FoundationModels)
+private extension LLMPlugin {
+    @available(iOS 26.0, *)
+    func validateAppleAvailability(model: SystemLanguageModel, call: CAPPluginCall) -> Bool {
+        switch model.availability {
+        case .available:
+            return true
+        case .unavailable(.deviceNotEligible):
+            call.reject("error deviceNotEligible error")
+        case .unavailable(.appleIntelligenceNotEnabled):
+            call.reject("error appleIntelligenceNotEnabled error")
+        case .unavailable(.modelNotReady):
+            call.reject("error modelNotReady error")
+        case .unavailable(let other):
+            call.reject("error \(other) error")
+        }
+
+        return false
+    }
+
+    @available(iOS 26.0, *)
+    func streamAppleResponse(chatId: String, message: String, chat: LanguageModelSession, call: CAPPluginCall) {
+        Task {
+            do {
+                let stream = chat.streamResponse(to: message)
+                for try await chunk in stream {
+                    let textChunk = extractAppleTextChunk(from: chunk)
+                    notifyListeners("textFromAi", data: [
+                        "chatId": chatId,
+                        "text": textChunk,
+                        "isChunk": true
+                    ])
+                }
+                notifyListeners("aiFinished", data: ["chatId": chatId])
+                call.resolve()
+            } catch {
+                notifyListeners("generationError", data: [
+                    "chatId": chatId,
+                    "error": error.localizedDescription
+                ])
+                call.reject("Failed to get response: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    @available(iOS 26.0, *)
+    func extractAppleTextChunk(from chunk: Any) -> String {
+        let mirror = Mirror(reflecting: chunk)
+
+        if let contentProperty = mirror.children.first(where: { $0.label == "content" }),
+           let content = contentProperty.value as? String {
+            print("[CapgoLLM] Extracted content: \(content)")
+            return content
+        }
+
+        if let rawContentProperty = mirror.children.first(where: { $0.label == "rawContent" }),
+           let rawContent = rawContentProperty.value as? String {
+            print("[CapgoLLM] Extracted rawContent: \(rawContent)")
+            return rawContent
+        }
+
+        let fallback = "\(chunk)"
+        print("[CapgoLLM] Fallback to string conversion: \(fallback)")
+        return fallback
+    }
+}
+#endif
+
+#if COCOAPODS || canImport(MediaPipeTasksGenAI)
+private extension LLMPlugin {
+    func streamMediaPipeResponse(chatId: String, message: String, inference: LlmInference, call: CAPPluginCall) {
+        Task {
+            do {
+                print("[CapgoLLM] Attempting to generate streaming response for message: \(message)")
+
+                let resultStream = inference.generateResponseAsync(inputText: message)
+
+                for try await partialResult in resultStream {
+                    print("[CapgoLLM] Partial result: \(partialResult)")
+                    notifyListeners("textFromAi", data: [
+                        "chatId": chatId,
+                        "text": partialResult,
+                        "isChunk": true
+                    ])
+                }
+
+                notifyListeners("aiFinished", data: ["chatId": chatId])
+                call.resolve()
+            } catch {
+                print("[CapgoLLM] Error details: \(error)")
+                notifyListeners("generationError", data: [
+                    "chatId": chatId,
+                    "error": error.localizedDescription
+                ])
+                call.reject("Failed to generate response: \(error.localizedDescription)")
+            }
+        }
+    }
+}
+#endif
 
 // Download delegate class to handle progress updates
 class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
