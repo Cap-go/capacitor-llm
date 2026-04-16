@@ -11,9 +11,9 @@ On-device LLM support for Capacitor.
 
 Current platform strategy:
 
-- iOS: Apple Intelligence by default, plus legacy custom MediaPipe models
+- iOS: Apple Intelligence by default, plus downloadable Gemma 4 `.litertlm` custom models
 - Android: LiteRT-LM for `.litertlm` bundles, with a compatibility fallback for legacy MediaPipe `.task` models
-- Web: MediaPipe `@mediapipe/tasks-genai`
+- Web: Gemma 4 web models through `@mediapipe/tasks-genai`
 
 ## Documentation
 
@@ -33,14 +33,14 @@ The most complete plugin docs are available at [capgo.app/docs/plugins/llm](http
 ## Installation
 
 ```bash
-npm install @capgo/capacitor-llm
-npx cap sync
+bun add @capgo/capacitor-llm
+bunx cap sync
 ```
 
 If you use the web implementation, also install the MediaPipe peer dependency:
 
 ```bash
-npm install @mediapipe/tasks-genai
+bun add @mediapipe/tasks-genai
 ```
 
 ## Model Setup
@@ -54,9 +54,9 @@ Recommended path:
 
 Custom iOS model path:
 
-- Still uses the existing MediaPipe integration
+- Uses the current GenAI session-based custom-model path
 - Requires CocoaPods for `MediaPipeTasksGenAI`
-- Best treated as experimental compared with Apple Intelligence
+- Supports downloaded mobile Gemma 4 `.litertlm` bundles
 
 Example:
 
@@ -113,13 +113,15 @@ Legacy compatibility:
 
 ### Web
 
-The web implementation still uses MediaPipe `.task` models.
+The web implementation uses `@mediapipe/tasks-genai` with web-ready model artifacts.
+
+Gemma 4 web models are published next to the mobile LiteRT-LM bundles and use `*-web.task`.
 
 Example:
 
 ```ts
 await CapgoLLM.setModel({
-  path: '/models/gemma-4-E2B-it-web.task',
+  path: 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.task?download=true',
   modelType: 'task',
   maxTokens: 4096,
 });
@@ -152,8 +154,9 @@ await CapgoLLM.sendMessage({
 ## Notes
 
 - Android now prefers LiteRT-LM and Gemma 4 style `.litertlm` bundles.
-- Web is unchanged and continues to rely on MediaPipe.
-- iOS custom-model support remains available through the existing MediaPipe path, but Apple Intelligence is the preferred default where available.
+- iOS custom-model support now uses per-chat GenAI sessions and can load downloaded Gemma 4 `.litertlm` bundles.
+- Web uses Gemma 4 `*-web.task` artifacts through `@mediapipe/tasks-genai`.
+- Apple Intelligence remains the preferred default on iOS where available.
 
 ## API
 
@@ -227,9 +230,9 @@ setModel(options: ModelOptions) => Promise<void>
 ```
 
 Sets the model configuration
-- iOS: Use "Apple Intelligence" as path for the system model, or provide a MediaPipe custom model
+- iOS: Use "Apple Intelligence" as path for the system model, or provide a downloaded custom model bundle such as Gemma 4 `.litertlm`
 - Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
-- Web: Provide a MediaPipe `.task` model
+- Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
 
 | Param         | Type                                                  | Description               |
 | ------------- | ----------------------------------------------------- | ------------------------- |
@@ -370,14 +373,14 @@ Get the native Capacitor plugin version.
 Model configuration options
 Only `path` is required. All other properties are optional overrides.
 
-| Prop              | Type                | Description                                                                                                                     |
-| ----------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for the Apple system model on iOS                                                            |
-| **`modelType`**   | <code>string</code> | Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. |
-| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                                      |
-| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                               |
-| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                                    |
-| **`randomSeed`**  | <code>number</code> | Optional. Random seed for generation.                                                                                           |
+| Prop              | Type                | Description                                                                                                                               |
+| ----------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for the Apple system model on iOS. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |
+| **`modelType`**   | <code>string</code> | Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path.           |
+| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                                                |
+| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                                         |
+| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                                              |
+| **`randomSeed`**  | <code>number</code> | Optional. Random seed for generation.                                                                                                     |
 
 
 #### DownloadModelResult

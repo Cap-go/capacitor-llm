@@ -15,5 +15,5 @@ Pod::Spec.new do |s|
   s.dependency 'Capacitor'
   s.dependency 'MediaPipeTasksGenAI'
   s.dependency 'MediaPipeTasksGenAIC'
-  s.swift_version = '5.1'
+  s.swift_version = '6.0'
 end

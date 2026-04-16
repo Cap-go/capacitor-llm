@@ -2,8 +2,9 @@
 
 This example app shows the current recommended plugin flows:
 
-- iOS: Apple Intelligence by default
+- iOS: Apple Intelligence by default, plus downloadable Gemma 4 LiteRT-LM models
 - Android: LiteRT-LM with Gemma 4 downloads
+- Web: Gemma 4 web models through `@mediapipe/tasks-genai`
 
 ## Setup
 
@@ -20,6 +21,12 @@ Requirements:
 
 - iOS 26.0+
 - Apple Intelligence enabled on the device
+
+Optional Gemma 4 custom-model path:
+
+- `Gemma 4 E2B (LiteRT-LM)`
+- `Gemma 4 E4B (LiteRT-LM)`
+- The app downloads the `.litertlm` bundles directly from `litert-community`.
 
 Optional legacy custom-model path:
 
@@ -51,6 +58,15 @@ await CapgoLLM.setModel({
 });
 ```
 
+## Web
+
+Available in the model picker:
+
+- `Gemma 4 E2B (Web)`
+- `Gemma 4 E4B (Web)`
+
+These load the web-specific `*-web.task` artifacts from the same `litert-community` Hugging Face repos and require a WebGPU-capable browser.
+
 ## Run
 
 ```bash
@@ -68,5 +84,6 @@ bunx cap open android
 ## Notes
 
 - Android now prefers `.litertlm` bundles through LiteRT-LM.
+- iOS custom-model sessions can also load downloaded `.litertlm` bundles.
 - Legacy Android `.task` models still work through the compatibility fallback in the plugin.
-- Web still uses MediaPipe `.task` models and is not demonstrated by this example app.
+- Web uses Gemma 4 `*-web.task` artifacts through `@mediapipe/tasks-genai`.

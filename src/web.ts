@@ -13,16 +13,26 @@ import type {
   ReadinessChangeEvent,
 } from './definitions';
 
+interface ChatTurn {
+  role: 'user' | 'model';
+  content: string;
+}
+
 interface ChatSession {
   id: string;
-  llm: any;
+  llm: LlmInference;
   isActive: boolean;
+  modelPath: string;
+  modelType: string;
+  history: ChatTurn[];
 }
 
 export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
-  private llm: any = null;
+  private llm: LlmInference | null = null;
   private chatSessions: Map<string, ChatSession> = new Map();
   private readiness = 'not-loaded';
+  private modelPath = '';
+  private modelType = 'task';
 
   async getReadiness(): Promise<{ readiness: string }> {
     return { readiness: this.readiness };
@@ -39,6 +49,9 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       id: chatId,
       llm: this.llm,
       isActive: true,
+      modelPath: this.modelPath,
+      modelType: this.modelType,
+      history: [],
     });
 
     return { id: chatId };
@@ -55,20 +68,39 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
     }
 
     let hasStreamed = false;
+    let responseText = '';
 
     try {
-      // Generate response using MediaPipe GenAI streaming API
-      const response = session.llm.generateResponseStream(options.message);
+      const prompt = this.buildPrompt(session, options.message);
 
-      for await (const partialResponse of response) {
+      const finalResponse = await session.llm.generateResponse(prompt, (partialResponse, done) => {
+        if (done || !partialResponse) {
+          return;
+        }
+
         hasStreamed = true;
-        // Send incremental text
+        responseText += partialResponse;
+
         this.notifyListeners('textFromAi', {
           text: partialResponse,
           chatId: options.chatId,
           isChunk: true,
         } as TextFromAiEvent);
+      });
+
+      if (!hasStreamed && finalResponse) {
+        responseText = finalResponse;
+        this.notifyListeners('textFromAi', {
+          text: finalResponse,
+          chatId: options.chatId,
+          isChunk: true,
+        } as TextFromAiEvent);
       }
+
+      session.history.push(
+        { role: 'user', content: options.message },
+        { role: 'model', content: responseText || finalResponse },
+      );
 
       // Notify completion
       this.notifyListeners('aiFinished', {
@@ -91,6 +123,8 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
 
   async setModel(options: ModelOptions): Promise<void> {
     try {
+      this.closeCurrentModel();
+
       // Update readiness
       this.readiness = 'loading';
       this.notifyListeners('readinessChange', { readiness: this.readiness } as ReadinessChangeEvent);
@@ -111,11 +145,15 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
       );
       // Create LLM instance
       this.llm = await LlmInference.createFromOptions(genai, config);
+      this.modelPath = options.path;
+      this.modelType = this.resolveModelType(options);
+      this.chatSessions.clear();
 
       // Update readiness
       this.readiness = 'ready';
       this.notifyListeners('readinessChange', { readiness: this.readiness } as ReadinessChangeEvent);
     } catch (error) {
+      this.closeCurrentModel();
       this.readiness = 'error';
       this.notifyListeners('readinessChange', { readiness: this.readiness } as ReadinessChangeEvent);
       throw error;
@@ -188,5 +226,37 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
 
   async getPluginVersion(): Promise<{ version: string }> {
     return { version: 'web' };
+  }
+
+  private closeCurrentModel(): void {
+    this.chatSessions.clear();
+    this.llm?.close();
+    this.llm = null;
+    this.modelPath = '';
+    this.modelType = 'task';
+  }
+
+  private resolveModelType(options: ModelOptions): string {
+    if (options.modelType?.trim()) {
+      return options.modelType.trim().toLowerCase();
+    }
+
+    const extension = options.path.split('.').pop();
+    return extension ? extension.toLowerCase() : 'task';
+  }
+
+  private buildPrompt(session: ChatSession, message: string): string {
+    if (!this.usesGemmaChatTemplate(session)) {
+      return message;
+    }
+
+    const history = [...session.history, { role: 'user' as const, content: message }];
+    return `${history
+      .map((turn) => `<start_of_turn>${turn.role}\n${turn.content}<end_of_turn>`)
+      .join('\n')}\n<start_of_turn>model\n`;
+  }
+
+  private usesGemmaChatTemplate(session: ChatSession): boolean {
+    return /gemma/i.test(session.modelPath) || session.modelType === 'litertlm';
   }
 }

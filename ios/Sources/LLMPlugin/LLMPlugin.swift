@@ -51,6 +51,10 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
     #if COCOAPODS || canImport(MediaPipeTasksGenAI)
     private var llmInference: LlmInference?
+    private var mediaPipeChats: [String: LlmInference.Session] = [:]
+    private var mediaPipeTopk: Int = 40
+    private var mediaPipeTemperature: Float = 0.8
+    private var mediaPipeRandomSeed: Int = 0
     #endif
 
     @objc func setModel(_ call: CAPPluginCall) {
@@ -65,10 +69,15 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         let maxTokens = call.getInt("maxTokens") ?? 2048
         let topk = call.getInt("topk") ?? 40
         let temperature = call.getFloat("temperature") ?? 0.8
+        let randomSeed = call.getInt("randomSeed") ?? 0
         let modelType = call.getString("modelType") // Optional model type parameter
 
         modelPath = path
         isReady = false
+        clearChatSessions()
+        #if COCOAPODS || canImport(MediaPipeTasksGenAI)
+        llmInference = nil
+        #endif
 
         // Check if user wants to use Apple Intelligence
         if path.lowercased() == "apple intelligence" {
@@ -138,6 +147,9 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
                 print("[CapgoLLM] Creating LlmInference instance with maxTokens: \(maxTokens), topk: \(topk), temperature: \(temperature)")
                 llmInference = try LlmInference(options: options)
+                mediaPipeTopk = topk
+                mediaPipeTemperature = temperature
+                mediaPipeRandomSeed = randomSeed
                 currentModelType = .mediaPipe
                 isReady = true
 
@@ -177,18 +189,23 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
         case .mediaPipe:
             #if COCOAPODS || canImport(MediaPipeTasksGenAI)
-            guard llmInference != nil else {
+            guard let inference = llmInference else {
                 print("[CapgoLLM] Error: Model not loaded when creating chat")
                 call.reject("Model not loaded")
                 return
             }
 
-            // MediaPipe doesn't use sessions, just return a dummy ID
-            let id = UUID().uuidString
-            print("[CapgoLLM] Created MediaPipe chat with ID: \(id)")
-            call.resolve([
-                "id": id
-            ])
+            do {
+                let session = try LlmInference.Session(llmInference: inference, options: makeMediaPipeSessionOptions())
+                let id = UUID().uuidString
+                mediaPipeChats[id] = session
+                print("[CapgoLLM] Created MediaPipe chat with ID: \(id)")
+                call.resolve([
+                    "id": id
+                ])
+            } catch {
+                call.reject("Failed to create chat: \(error.localizedDescription)")
+            }
             #else
             call.reject("MediaPipe is not available. Please install via CocoaPods.")
             #endif
@@ -263,12 +280,17 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
         case .mediaPipe:
             #if COCOAPODS || canImport(MediaPipeTasksGenAI)
-            guard let inference = llmInference else {
+            guard llmInference != nil else {
                 call.reject("Model not loaded")
                 return
             }
 
-            streamMediaPipeResponse(chatId: chatId, message: message, inference: inference, call: call)
+            guard let session = mediaPipeChats[chatId] else {
+                call.reject("chat not found")
+                return
+            }
+
+            streamMediaPipeResponse(chatId: chatId, message: message, session: session, call: call)
             #else
             call.reject("MediaPipe is not available. Please install via CocoaPods.")
             #endif
@@ -353,6 +375,15 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func getPluginVersion(_ call: CAPPluginCall) {
         call.resolve(["version": self.pluginVersion])
     }
+
+    private func clearChatSessions() {
+        #if canImport(FoundationModels)
+        appleChats.removeAll()
+        #endif
+        #if COCOAPODS || canImport(MediaPipeTasksGenAI)
+        mediaPipeChats.removeAll()
+        #endif
+    }
 }
 
 #if canImport(FoundationModels)
@@ -425,12 +456,20 @@ private extension LLMPlugin {
 
 #if COCOAPODS || canImport(MediaPipeTasksGenAI)
 private extension LLMPlugin {
-    func streamMediaPipeResponse(chatId: String, message: String, inference: LlmInference, call: CAPPluginCall) {
+    func makeMediaPipeSessionOptions() -> LlmInference.Session.Options {
+        let options = LlmInference.Session.Options()
+        options.topk = mediaPipeTopk
+        options.temperature = mediaPipeTemperature
+        options.randomSeed = mediaPipeRandomSeed
+        return options
+    }
+
+    func streamMediaPipeResponse(chatId: String, message: String, session: LlmInference.Session, call: CAPPluginCall) {
         Task {
             do {
                 print("[CapgoLLM] Attempting to generate streaming response for message: \(message)")
-
-                let resultStream = inference.generateResponseAsync(inputText: message)
+                try session.addQueryChunk(inputText: message)
+                let resultStream = session.generateResponseAsync()
 
                 for try await partialResult in resultStream {
                     print("[CapgoLLM] Partial result: \(partialResult)")

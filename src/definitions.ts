@@ -23,9 +23,9 @@ export interface LLMPlugin {
 
   /**
    * Sets the model configuration
-   * - iOS: Use "Apple Intelligence" as path for the system model, or provide a MediaPipe custom model
+   * - iOS: Use "Apple Intelligence" as path for the system model, or provide a downloaded custom model bundle such as Gemma 4 `.litertlm`
    * - Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
-   * - Web: Provide a MediaPipe `.task` model
+   * - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
    */
@@ -189,7 +189,7 @@ export interface ReadinessChangeEvent {
  * Only `path` is required. All other properties are optional overrides.
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for the Apple system model on iOS */
+  /** Model path or "Apple Intelligence" for the Apple system model on iOS. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. */
   path: string;
   /** Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. */
   modelType?: string;

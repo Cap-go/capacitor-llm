@@ -211,6 +211,7 @@ const messages = ref<Message[]>([]);
 let messageIdCounter = 1;
 const isIOS = computed(() => Capacitor.getPlatform() === 'ios');
 const isAndroid = computed(() => Capacitor.getPlatform() === 'android');
+const isWeb = computed(() => Capacitor.getPlatform() === 'web');
 const canSendMessage = computed(() => Boolean(newMessage.value.trim()) && Boolean(chatId.value) && readinessStatus.value === 'ready');
 const inputPlaceholder = computed(() => {
   if (chatId.value) {
@@ -223,6 +224,10 @@ const inputPlaceholder = computed(() => {
 
   if (isIOS.value) {
     return 'Preparing Apple Intelligence...';
+  }
+
+  if (isWeb.value) {
+    return 'Select a Gemma 4 web model first...';
   }
 
   return 'Load a model first...';
@@ -244,7 +249,7 @@ interface Model {
 }
 
 // Available models
-const models: { ios: Model[], android: Model[] } = {
+const models: { ios: Model[], android: Model[], web: Model[] } = {
   ios: [
     { 
       id: 'apple-intelligence', 
@@ -253,13 +258,33 @@ const models: { ios: Model[], android: Model[] } = {
       note: 'System LLM - no download needed'
     },
     {
+      id: 'gemma4-e2b-ios-download',
+      name: 'Gemma 4 E2B (LiteRT-LM)',
+      needsDownload: true,
+      url: 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true',
+      filename: 'gemma-4-E2B-it.litertlm',
+      modelType: 'litertlm',
+      maxTokens: 4096,
+      note: 'Downloads the iOS/mobile Gemma 4 LiteRT-LM bundle.'
+    },
+    {
+      id: 'gemma4-e4b-ios-download',
+      name: 'Gemma 4 E4B (LiteRT-LM)',
+      needsDownload: true,
+      url: 'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm?download=true',
+      filename: 'gemma-4-E4B-it.litertlm',
+      modelType: 'litertlm',
+      maxTokens: 4096,
+      note: 'Larger iOS/mobile Gemma 4 variant for devices with more RAM.'
+    },
+    {
       id: 'gemma2-2b-legacy',
       name: 'Gemma 2 2B (Legacy MediaPipe)',
       needsDownload: false,
       path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
       modelType: 'task',
       maxTokens: 1280,
-      note: 'Manual bundle setup only. Android is the Gemma 4 LiteRT showcase.'
+      note: 'Manual bundle setup only. Kept as a legacy compatibility path.'
     }
   ],
   android: [
@@ -283,13 +308,34 @@ const models: { ios: Model[], android: Model[] } = {
       maxTokens: 4096,
       note: 'Larger Gemma 4 variant for devices with more RAM.'
     }
+  ],
+  web: [
+    {
+      id: 'gemma4-e2b-web',
+      name: 'Gemma 4 E2B (Web)',
+      needsDownload: false,
+      path: 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.task?download=true',
+      modelType: 'task',
+      maxTokens: 4096,
+      note: 'WebGPU-ready Gemma 4 artifact served directly from Hugging Face.'
+    },
+    {
+      id: 'gemma4-e4b-web',
+      name: 'Gemma 4 E4B (Web)',
+      needsDownload: false,
+      path: 'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.task?download=true',
+      modelType: 'task',
+      maxTokens: 4096,
+      note: 'Larger Gemma 4 web model. Chrome/WebGPU and more memory recommended.'
+    }
   ]
 };
 
 const availableModels = computed(() => {
   if (isIOS.value) return models.ios;
   if (isAndroid.value) return models.android;
-  return [];
+  if (isWeb.value) return models.web;
+  return models.web;
 });
 
 const refresh = (ev: CustomEvent) => {
@@ -618,12 +664,16 @@ onMounted(async () => {
         selectedModel.value = 'apple-intelligence';
         await CapgoLLM.setModel({ path: 'Apple Intelligence' });
         await initializeChat();
-        setConversationIntro('Apple Intelligence is ready. Ask anything.');
+        setConversationIntro('Apple Intelligence is ready. Open Model to switch to Gemma 4 LiteRT-LM.');
         console.log('iOS: Using Apple Intelligence (default)');
       } else if (platform === 'android') {
         selectedModel.value = 'gemma4-e2b-download';
         readinessStatus.value = 'not_ready';
         setConversationIntro('Select a Gemma 4 LiteRT-LM model from the Model menu to start chatting.');
+      } else {
+        selectedModel.value = 'gemma4-e2b-web';
+        readinessStatus.value = 'not_ready';
+        setConversationIntro('Select a Gemma 4 web model from the Model menu to start chatting.');
       }
     } catch (modelError) {
       console.warn('Model setup error (using defaults):', modelError);
