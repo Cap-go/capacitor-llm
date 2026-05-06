@@ -30,6 +30,7 @@ public class LLM {
     private Executor executor;
     private String modelPath = null;
     private String tokenizerPath = null;
+    private List<String> specialTokens = null;
     private Engine currentEngine = Engine.MEDIAPIPE;
 
     private LLM(Context context) {
@@ -66,6 +67,7 @@ public class LLM {
     ) {
         this.modelPath = path;
         this.tokenizerPath = tokenizerPath;
+        this.specialTokens = specialTokens;
         this.modelType = modelType;
         this.maxTokens = maxTokens;
         this.sequenceLength = sequenceLength != null ? sequenceLength : maxTokens;
@@ -183,7 +185,7 @@ public class LLM {
         android.util.Log.d("LLM", "Final ExecuTorch model path: " + actualModelPath);
         android.util.Log.d("LLM", "Final ExecuTorch tokenizer path: " + actualTokenizerPath);
 
-        executorchModule = new LlmModule(executorModelType, actualModelPath, actualTokenizerPath, temperature);
+        executorchModule = new LlmModule(executorModelType, actualModelPath, actualTokenizerPath, temperature, specialTokens);
         executorchModule.load();
     }
 

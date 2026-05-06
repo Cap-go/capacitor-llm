@@ -60,6 +60,8 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     #endif
 
     private var execuTorchRunner: DynamicExecuTorchRunner?
+    private let execuTorchGenerationLock = NSLock()
+    private var execuTorchIsGenerating = false
 
     @objc func setModel(_ call: CAPPluginCall) {
         guard let path = call.getString("path") else {
@@ -514,8 +516,16 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("ExecuTorch model not loaded")
                 return
             }
+            guard beginExecuTorchGeneration() else {
+                call.reject("ExecuTorch is already generating. Wait for aiFinished before sending another message.")
+                return
+            }
 
             Task {
+                defer {
+                    self.finishExecuTorchGeneration()
+                }
+
                 do {
                     print("[CapgoLLM] Attempting to generate ExecuTorch response for message: \(message)")
                     try runner.generate(message) { token in
@@ -533,6 +543,24 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+    }
+
+    private func beginExecuTorchGeneration() -> Bool {
+        execuTorchGenerationLock.lock()
+        defer { execuTorchGenerationLock.unlock() }
+
+        if execuTorchIsGenerating {
+            return false
+        }
+
+        execuTorchIsGenerating = true
+        return true
+    }
+
+    private func finishExecuTorchGeneration() {
+        execuTorchGenerationLock.lock()
+        execuTorchIsGenerating = false
+        execuTorchGenerationLock.unlock()
     }
 
     @objc func downloadModel(_ call: CAPPluginCall) {
