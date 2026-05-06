@@ -10,6 +10,9 @@ import FoundationModels
 #if canImport(MediaPipeTasksGenAI) && !targetEnvironment(macCatalyst)
 import MediaPipeTasksGenAI
 #endif
+#if canImport(ExecuTorchLLM)
+import ExecuTorchLLM
+#endif
 
 /**
  * Please read the Capacitor iOS Plugin Development Guide
@@ -78,10 +81,18 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var execuTorchRunner: DynamicExecuTorchRunner?
     private var execuTorchChats: [String: ExecuTorchChatSession] = [:]
     private let execuTorchGenerationLock = NSLock()
-    private let execuTorchNotLinkedMessage = "ExecuTorch is not linked in this iOS app. " +
-        "It is not installed by CocoaPods; add the ExecuTorch Swift Package products " +
-        "to the app target on iOS 17+ or choose another engine."
+    private let execuTorchNotLinkedMessage = "ExecuTorch is not available in this iOS build. " +
+        "It is not installed by CocoaPods; use the Swift Package Manager integration " +
+        "on iOS 17+ or choose another engine."
     private var execuTorchIsGenerating = false
+
+    private var isExecuTorchRuntimeAvailable: Bool {
+        #if canImport(ExecuTorchLLM)
+        return DynamicExecuTorchRunner.isAvailable
+        #else
+        return false
+        #endif
+    }
 
     @objc func setModel(_ call: CAPPluginCall) {
         guard let path = call.getString("path") else {
@@ -259,7 +270,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        guard DynamicExecuTorchRunner.isAvailable else {
+        guard isExecuTorchRuntimeAvailable else {
             isReady = false
             notifyListeners("readinessChange", data: ["readiness": execuTorchNotLinkedMessage])
             call.reject(execuTorchNotLinkedMessage)
