@@ -18,7 +18,7 @@ import MediaPipeTasksGenAI
 
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
-    private let pluginVersion: String = "8.0.11"
+    private let pluginVersion: String = "8.0.12"
     #if targetEnvironment(macCatalyst)
     private let catalystNotSupportedMessage = "CapgoLLM is not available on Mac Catalyst. Use an iOS/iPadOS target instead."
     #endif
