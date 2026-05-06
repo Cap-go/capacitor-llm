@@ -73,7 +73,7 @@ end
 ```
 
 **Using Swift Package Manager:**
-The Swift package includes ExecuTorch products for `.pte` models. ExecuTorch currently requires iOS 17 or newer through SPM. MediaPipe GenAI still does not officially support SPM, so use CocoaPods for MediaPipe `.task` models.
+The main Swift package stays compatible with iOS 15. To use ExecuTorch `.pte` models on iOS, add the ExecuTorch Swift package to your app target and link `executorch_llm`, `backend_xnnpack`, `kernels_llm`, `kernels_optimized`, `kernels_quantized`, and `kernels_torchao`. ExecuTorch currently requires iOS 17 or newer in the app target that links it. MediaPipe GenAI still does not officially support SPM, so use CocoaPods for MediaPipe `.task` models.
 
 ## Adding a Model to Your App
 
@@ -81,7 +81,7 @@ The simplest cross-platform custom model path is ExecuTorch. It uses the same ki
 
 ### ExecuTorch Models (iOS and Android)
 
-iOS uses the ExecuTorch SwiftPM products from `Package.swift`. Android uses the ExecuTorch Maven package.
+iOS uses ExecuTorch when the app target links the ExecuTorch SwiftPM products. Android uses the ExecuTorch Maven package.
 
 Bundle the model files:
 
@@ -468,7 +468,7 @@ iOS MediaPipe remains experimental because some `.task` models can fail during p
 ## Known Issues
 
 - ExecuTorch is native-only and is not available on web.
-- ExecuTorch through Swift Package Manager requires iOS 17 or newer.
+- iOS ExecuTorch requires linking the ExecuTorch SwiftPM products in the app target, and that app target must support iOS 17 or newer.
 - Apple Intelligence requires iOS 26.0 or later and a supported device.
 - Android requires minSdkVersion 24 or higher.
 - Model files are large, so production apps should usually download them after install.

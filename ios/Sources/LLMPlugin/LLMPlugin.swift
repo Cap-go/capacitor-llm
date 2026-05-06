@@ -1,5 +1,7 @@
 import Foundation
 import Capacitor
+import ObjectiveC
+import Darwin
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -7,9 +9,6 @@ import FoundationModels
 // For SPM, we need conditional import when SPM support is added
 #if canImport(MediaPipeTasksGenAI) && !targetEnvironment(macCatalyst)
 import MediaPipeTasksGenAI
-#endif
-#if canImport(ExecuTorchLLM)
-import ExecuTorchLLM
 #endif
 
 /**
@@ -60,11 +59,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var llmInference: LlmInference?
     #endif
 
-    #if canImport(ExecuTorchLLM)
-    private var execuTorchRunner: TextRunner?
-    private var execuTorchSequenceLength = 2048
-    private var execuTorchTemperature = 0.8
-    #endif
+    private var execuTorchRunner: DynamicExecuTorchRunner?
 
     @objc func setModel(_ call: CAPPluginCall) {
         guard let path = call.getString("path") else {
@@ -212,7 +207,11 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         sequenceLength: Int,
         temperature: Float
     ) {
-        #if canImport(ExecuTorchLLM)
+        guard DynamicExecuTorchRunner.isAvailable else {
+            call.reject("ExecuTorch is not linked in this iOS app. Add the ExecuTorch Swift Package products to the app target.")
+            return
+        }
+
         guard let tokenizerPath = tokenizerPath, !tokenizerPath.isEmpty else {
             call.reject("tokenizerPath is required for ExecuTorch models")
             return
@@ -226,16 +225,13 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 print("[CapgoLLM] Initializing ExecuTorch with model at: \(modelURL.path)")
                 print("[CapgoLLM] Initializing ExecuTorch with tokenizer at: \(tokenizerURL.path)")
 
-                let runner = TextRunner(
+                execuTorchRunner = try DynamicExecuTorchRunner(
                     modelPath: modelURL.path,
                     tokenizerPath: tokenizerURL.path,
-                    specialTokens: specialTokens
+                    specialTokens: specialTokens,
+                    sequenceLength: sequenceLength,
+                    temperature: Double(temperature)
                 )
-                try runner.load()
-
-                execuTorchRunner = runner
-                execuTorchSequenceLength = sequenceLength
-                execuTorchTemperature = Double(temperature)
                 currentModelType = .execuTorch
                 isReady = true
 
@@ -247,9 +243,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("Failed to load ExecuTorch model: \(error.localizedDescription)")
             }
         }
-        #else
-        call.reject("ExecuTorch is not available in this iOS build. Use the Swift Package Manager integration.")
-        #endif
     }
 
     private func resolveModelURL(path: String, modelType: String?, defaultExtension: String) throws -> URL {
@@ -324,7 +317,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .execuTorch:
-            #if canImport(ExecuTorchLLM)
             guard execuTorchRunner != nil else {
                 call.reject("ExecuTorch model not loaded")
                 return
@@ -334,9 +326,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve([
                 "id": id
             ])
-            #else
-            call.reject("ExecuTorch is not available in this iOS build")
-            #endif
         }
     }
 
@@ -521,7 +510,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .execuTorch:
-            #if canImport(ExecuTorchLLM)
             guard let runner = execuTorchRunner else {
                 call.reject("ExecuTorch model not loaded")
                 return
@@ -530,10 +518,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             Task {
                 do {
                     print("[CapgoLLM] Attempting to generate ExecuTorch response for message: \(message)")
-                    try runner.generate(message, Config {
-                        $0.temperature = execuTorchTemperature
-                        $0.sequenceLength = execuTorchSequenceLength
-                    }) { token in
+                    try runner.generate(message) { token in
                         self.notifyListeners("textFromAi", data: [
                             "chatId": chatId,
                             "text": token,
@@ -547,9 +532,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                     call.reject("Failed to generate ExecuTorch response: \(error.localizedDescription)")
                 }
             }
-            #else
-            call.reject("ExecuTorch is not available in this iOS build")
-            #endif
         }
     }
 
@@ -632,6 +614,132 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func getPluginVersion(_ call: CAPPluginCall) {
         call.resolve(["version": self.pluginVersion])
+    }
+}
+
+private typealias ExecuTorchAllocFunction = @convention(c) (AnyClass, Selector) -> Unmanaged<AnyObject>
+private typealias ExecuTorchInitRunnerFunction = @convention(c) (
+    AnyObject,
+    Selector,
+    NSString,
+    NSString,
+    NSArray
+) -> Unmanaged<AnyObject>
+private typealias ExecuTorchLoadFunction = @convention(c) (
+    AnyObject,
+    Selector,
+    UnsafeMutablePointer<NSError?>
+) -> Bool
+private typealias ExecuTorchConfigBlock = @convention(block) (NSObject) -> Void
+private typealias ExecuTorchInitConfigFunction = @convention(c) (
+    AnyObject,
+    Selector,
+    ExecuTorchConfigBlock
+) -> Unmanaged<AnyObject>
+private typealias ExecuTorchTokenCallback = @convention(block) (NSString) -> Void
+private typealias ExecuTorchGenerateFunction = @convention(c) (
+    AnyObject,
+    Selector,
+    NSString,
+    AnyObject,
+    ExecuTorchTokenCallback,
+    UnsafeMutablePointer<NSError?>
+) -> Bool
+private typealias ExecuTorchVoidFunction = @convention(c) (AnyObject, Selector) -> Void
+
+private final class DynamicExecuTorchRunner {
+    static var isAvailable: Bool {
+        findClass("ExecuTorchLLMTextRunner") != nil && findClass("ExecuTorchLLMConfig") != nil
+    }
+
+    private let runner: AnyObject
+    private let sequenceLength: Int
+    private let temperature: Double
+
+    init(
+        modelPath: String,
+        tokenizerPath: String,
+        specialTokens: [String],
+        sequenceLength: Int,
+        temperature: Double
+    ) throws {
+        guard let runnerClass = Self.findClass("ExecuTorchLLMTextRunner") else {
+            throw Self.error("ExecuTorchLLMTextRunner was not found. Link ExecuTorch in the app target.")
+        }
+
+        let alloc: ExecuTorchAllocFunction = try Self.objcMessage()
+        let initRunner: ExecuTorchInitRunnerFunction = try Self.objcMessage()
+        let load: ExecuTorchLoadFunction = try Self.objcMessage()
+
+        let allocatedRunner = alloc(runnerClass, NSSelectorFromString("alloc")).takeRetainedValue()
+        runner = initRunner(
+            allocatedRunner,
+            NSSelectorFromString("initWithModelPath:tokenizerPath:specialTokens:"),
+            modelPath as NSString,
+            tokenizerPath as NSString,
+            specialTokens as NSArray
+        ).takeRetainedValue()
+        self.sequenceLength = sequenceLength
+        self.temperature = temperature
+
+        var loadError: NSError?
+        guard load(runner, NSSelectorFromString("loadWithError:"), &loadError) else {
+            throw loadError ?? Self.error("ExecuTorch model failed to load")
+        }
+    }
+
+    func generate(_ prompt: String, tokenCallback: @escaping (String) -> Void) throws {
+        guard let configClass = Self.findClass("ExecuTorchLLMConfig") else {
+            throw Self.error("ExecuTorchLLMConfig was not found. Link ExecuTorch in the app target.")
+        }
+
+        let sendVoid: ExecuTorchVoidFunction = try Self.objcMessage()
+        let alloc: ExecuTorchAllocFunction = try Self.objcMessage()
+        let initConfig: ExecuTorchInitConfigFunction = try Self.objcMessage()
+        let generate: ExecuTorchGenerateFunction = try Self.objcMessage()
+
+        sendVoid(runner, NSSelectorFromString("reset"))
+
+        let allocatedConfig = alloc(configClass, NSSelectorFromString("alloc")).takeRetainedValue()
+        let configBlock: ExecuTorchConfigBlock = { [temperature, sequenceLength] config in
+            config.setValue(temperature, forKey: "temperature")
+            config.setValue(sequenceLength, forKey: "sequenceLength")
+        }
+        let config = initConfig(
+            allocatedConfig,
+            NSSelectorFromString("initWithBlock:"),
+            configBlock
+        ).takeRetainedValue()
+
+        let callback: ExecuTorchTokenCallback = { token in
+            tokenCallback(token as String)
+        }
+        var generateError: NSError?
+        guard generate(
+            runner,
+            NSSelectorFromString("generateWithPrompt:config:tokenCallback:error:"),
+            prompt as NSString,
+            config,
+            callback,
+            &generateError
+        ) else {
+            throw generateError ?? Self.error("ExecuTorch generation failed")
+        }
+    }
+
+    private static func objcMessage<Function>() throws -> Function {
+        guard let handle = dlopen(nil, RTLD_NOW), let symbol = dlsym(handle, "objc_msgSend") else {
+            throw error("Unable to resolve objc_msgSend")
+        }
+        return unsafeBitCast(symbol, to: Function.self)
+    }
+
+    private static func findClass(_ name: String) -> AnyClass? {
+        NSClassFromString(name) ?? NSClassFromString("ExecuTorchLLM.\(name)")
+    }
+
+    private static func error(_ description: String) -> NSError {
+        NSError(domain: "CapgoLLM.ExecuTorch", code: 1, userInfo: [NSLocalizedDescriptionKey: description])
     }
 }
 
