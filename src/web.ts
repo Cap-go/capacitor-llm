@@ -78,16 +78,17 @@ export class CapgoLLMWeb extends WebPlugin implements LLMPlugin {
 
   async setModel(options: ModelOptions): Promise<void> {
     const engine = options.engine ?? 'auto';
+    const normalizedPath = options.path.toLowerCase();
+    const wantsApple = engine === 'apple' || (engine === 'auto' && normalizedPath === 'apple intelligence');
     const wantsExecuTorch =
-      engine === 'executorch' ||
-      (engine === 'auto' && (options.tokenizerPath || options.path.toLowerCase().endsWith('.pte')));
+      engine === 'executorch' || (engine === 'auto' && (options.tokenizerPath || normalizedPath.endsWith('.pte')));
+
+    if (wantsApple) {
+      throw new Error('Apple Intelligence is only available on native iOS.');
+    }
 
     if (wantsExecuTorch) {
       throw new Error('ExecuTorch is only available on native iOS and Android.');
-    }
-
-    if (engine === 'apple') {
-      throw new Error('Apple Intelligence is only available on native iOS.');
     }
 
     try {

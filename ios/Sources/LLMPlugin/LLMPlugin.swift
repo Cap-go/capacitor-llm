@@ -92,6 +92,11 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         modelPath = path
+        #if !targetEnvironment(macCatalyst) && (COCOAPODS || canImport(MediaPipeTasksGenAI))
+        llmInference = nil
+        #endif
+        execuTorchRunner = nil
+        finishExecuTorchGeneration()
         isReady = false
 
         // Check if user wants to use Apple Intelligence
@@ -107,6 +112,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         if shouldUseExecuTorch(engine: engine, path: path, tokenizerPath: tokenizerPath) {
+            currentModelType = .execuTorch
             setExecuTorchModel(
                 call,
                 path: path,
@@ -120,6 +126,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         #if !targetEnvironment(macCatalyst) && canImport(MediaPipeTasksGenAI)
+        currentModelType = .mediaPipe
         Task {
             do {
                 let modelURL: URL
@@ -184,6 +191,8 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 notifyListeners("readinessChange", data: ["readiness": "ready"])
                 call.resolve()
             } catch {
+                llmInference = nil
+                isReady = false
                 print("[CapgoLLM] Error loading model: \(error.localizedDescription)")
                 notifyListeners("readinessChange", data: ["readiness": "Failed to load model: \(error.localizedDescription)"])
                 call.reject("Failed to load model: \(error.localizedDescription)")

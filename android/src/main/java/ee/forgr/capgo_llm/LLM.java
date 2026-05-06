@@ -82,8 +82,6 @@ public class LLM {
         }
         isReady = false;
 
-        releaseCurrentModel();
-
         android.util.Log.d(
             "LLM",
             "setModel called with engine: " +
@@ -158,6 +156,7 @@ public class LLM {
 
         executor.execute(() -> {
             try {
+                releaseCurrentModel();
                 if (currentEngine == Engine.EXECUTORCH) {
                     initializeExecutorchModel();
                 } else {
@@ -310,7 +309,11 @@ public class LLM {
     }
 
     private void sendExecutorchMessage(String chatId, String message, ChatSession session, MessageCallback callback) {
-        if (executorchModule == null) {
+        final LlmModule module = executorchModule;
+        final int generationSequenceLength = sequenceLength;
+        final float generationTemperature = temperature;
+
+        if (module == null) {
             callback.onError("ExecuTorch model not ready");
             return;
         }
@@ -322,10 +325,10 @@ public class LLM {
                 AtomicBoolean completed = new AtomicBoolean(false);
                 StringBuilder fullResponse = new StringBuilder();
 
-                executorchModule.resetContext();
-                int errorCode = executorchModule.generate(
+                module.resetContext();
+                int errorCode = module.generate(
                     fullPrompt,
-                    sequenceLength,
+                    generationSequenceLength,
                     new LlmCallback() {
                         @Override
                         public void onResult(String result) {
@@ -345,7 +348,7 @@ public class LLM {
                         }
                     },
                     false,
-                    temperature,
+                    generationTemperature,
                     0,
                     0
                 );
@@ -364,7 +367,11 @@ public class LLM {
     }
 
     private void sendMediaPipeMessage(String chatId, String message, ChatSession session, MessageCallback callback) {
-        if (mediaPipeInference == null) {
+        final LlmInference inference = mediaPipeInference;
+        final int sessionTopk = topk;
+        final float sessionTemperature = temperature;
+
+        if (inference == null) {
             callback.onError("MediaPipe model not ready");
             return;
         }
@@ -381,12 +388,12 @@ public class LLM {
                 // Create a session with proper options
                 com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions sessionOptions =
                     com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
-                        .setTopK(topk)
-                        .setTemperature(temperature)
+                        .setTopK(sessionTopk)
+                        .setTemperature(sessionTemperature)
                         .build();
 
                 com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession inferenceSession =
-                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.createFromOptions(mediaPipeInference, sessionOptions);
+                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.createFromOptions(inference, sessionOptions);
 
                 // Add the query
                 inferenceSession.addQueryChunk(fullPrompt);
@@ -508,8 +515,7 @@ public class LLM {
         }
 
         String buildPrompt(String newMessage) {
-            // Keep compatibility with the previous MediaPipe path: callers pass a fully formatted prompt when needed.
-            return newMessage;
+            return history.toString();
         }
     }
 }
