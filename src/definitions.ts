@@ -23,8 +23,8 @@ export interface LLMPlugin {
 
   /**
    * Sets the model configuration
-   * - iOS: Use "Apple Intelligence" as path for system model, or provide path to MediaPipe model
-   * - Android: Path to a MediaPipe model file (in assets or files directory)
+   * - iOS: Use "Apple Intelligence" as path for system model, provide a MediaPipe model, or set engine to "executorch"
+   * - Android: Path to a MediaPipe or ExecuTorch model file (in assets or files directory)
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
    */
@@ -166,10 +166,24 @@ export interface ReadinessChangeEvent {
 export interface ModelOptions {
   /** Model path or "Apple Intelligence" for iOS system model */
   path: string;
+  /**
+   * Runtime engine to use.
+   * - "auto": uses Apple Intelligence on iOS when path is "Apple Intelligence", ExecuTorch for `.pte` or tokenizerPath, otherwise MediaPipe
+   * - "apple": iOS Foundation Models / Apple Intelligence
+   * - "mediapipe": MediaPipe GenAI `.task` models
+   * - "executorch": ExecuTorch `.pte` models with a tokenizer file
+   */
+  engine?: 'auto' | 'apple' | 'mediapipe' | 'executorch';
   /** Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path. */
   modelType?: string;
+  /** Tokenizer path for ExecuTorch models. Required when engine is "executorch". */
+  tokenizerPath?: string;
+  /** Optional special tokens passed to iOS ExecuTorch tokenizers. */
+  specialTokens?: string[];
   /** Maximum number of tokens the model handles */
   maxTokens?: number;
+  /** Sequence length for ExecuTorch generation. Defaults to maxTokens when omitted. */
+  sequenceLength?: number;
   /** Number of tokens the model considers at each step */
   topk?: number;
   /** Amount of randomness in generation (0.0-1.0) */

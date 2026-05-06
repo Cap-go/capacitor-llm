@@ -1,10 +1,13 @@
 package ee.forgr.capgo_llm;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.ArrayList;
+import java.util.List;
 
 @CapacitorPlugin(name = "CapgoLLM")
 public class LLMPlugin extends Plugin {
@@ -94,14 +97,33 @@ public class LLMPlugin extends Plugin {
         }
 
         // Extract model parameters
+        String engine = call.getString("engine", "auto");
+        String modelType = call.getString("modelType");
+        String tokenizerPath = call.getString("tokenizerPath");
         Integer maxTokens = call.getInt("maxTokens", 2048);
+        Integer sequenceLength = call.getInt("sequenceLength", maxTokens);
         Integer topk = call.getInt("topk", 40);
         Float temperature = call.getFloat("temperature", 0.8f);
-        Integer randomSeed = call.getInt("randomSeed", 101);
+        List<String> specialTokens = getStringList(call.getArray("specialTokens"));
+
+        if (sequenceLength <= 0) {
+            call.reject("sequenceLength must be > 0");
+            return;
+        }
+
+        if (!specialTokens.isEmpty()) {
+            call.reject("specialTokens are only supported by ExecuTorch on iOS");
+            return;
+        }
 
         llm.setModel(
             path,
+            engine,
+            modelType,
+            tokenizerPath,
+            specialTokens,
             maxTokens,
+            sequenceLength,
             topk,
             temperature,
             new LLM.ModelLoadCallback() {
@@ -180,6 +202,21 @@ public class LLMPlugin extends Plugin {
             }
         })
             .start();
+    }
+
+    private List<String> getStringList(JSArray values) {
+        List<String> result = new ArrayList<>();
+        if (values == null) {
+            return result;
+        }
+
+        for (int i = 0; i < values.length(); i++) {
+            String value = values.optString(i, null);
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
     }
 
     private void downloadFile(String urlString, java.io.File outputFile, ProgressCallback callback) throws Exception {
