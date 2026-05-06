@@ -39,6 +39,22 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         case execuTorch
     }
 
+    private final class ExecuTorchChatSession {
+        private var turns: [(role: String, content: String)] = []
+
+        func buildPrompt(userMessage: String) -> String {
+            var parts = turns.map { "\($0.role): \($0.content)" }
+            parts.append("User: \(userMessage)")
+            parts.append("Assistant:")
+            return parts.joined(separator: "\n")
+        }
+
+        func addTurn(userMessage: String, assistantMessage: String) {
+            turns.append((role: "User", content: userMessage))
+            turns.append((role: "Assistant", content: assistantMessage))
+        }
+    }
+
     private var currentModelType: ModelType = .appleIntelligence
     private var isReady = false
     private var modelPath: String?
@@ -60,6 +76,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     #endif
 
     private var execuTorchRunner: DynamicExecuTorchRunner?
+    private var execuTorchChats: [String: ExecuTorchChatSession] = [:]
     private let execuTorchGenerationLock = NSLock()
     private var execuTorchIsGenerating = false
 
@@ -91,19 +108,23 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
+        guard !isExecuTorchGenerating() else {
+            call.reject("Cannot switch model while ExecuTorch is generating. Wait for aiFinished.")
+            return
+        }
+
         modelPath = path
+        execuTorchChats.removeAll()
         #if !targetEnvironment(macCatalyst) && (COCOAPODS || canImport(MediaPipeTasksGenAI))
         llmInference = nil
         #endif
         execuTorchRunner = nil
-        finishExecuTorchGeneration()
         isReady = false
 
         // Check if user wants to use Apple Intelligence
         if engine == "apple" || path.lowercased() == "apple intelligence" {
             print("[CapgoLLM] Switching to Apple Intelligence")
             execuTorchRunner = nil
-            finishExecuTorchGeneration()
             currentModelType = .appleIntelligence
             isReady = true
             notifyListeners("readinessChange", data: ["readiness": "ready"])
@@ -229,7 +250,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         temperature: Float
     ) {
         execuTorchRunner = nil
-        finishExecuTorchGeneration()
 
         guard sequenceLength > 0 else {
             call.reject("sequenceLength must be > 0")
@@ -353,6 +373,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             let id = UUID().uuidString
+            execuTorchChats[id] = ExecuTorchChatSession()
             print("[CapgoLLM] Created ExecuTorch chat with ID: \(id)")
             call.resolve([
                 "id": id
@@ -545,6 +566,10 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.reject("ExecuTorch model not loaded")
                 return
             }
+            guard let chat = execuTorchChats[chatId] else {
+                call.reject("chat not found")
+                return
+            }
             guard beginExecuTorchGeneration() else {
                 call.reject("ExecuTorch is already generating. Wait for aiFinished before sending another message.")
                 return
@@ -556,14 +581,18 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
 
                 do {
+                    let prompt = chat.buildPrompt(userMessage: message)
+                    var fullResponse = ""
                     print("[CapgoLLM] Attempting to generate ExecuTorch response for message: \(message)")
-                    try runner.generate(message) { token in
+                    try runner.generate(prompt) { token in
                         self.notifyListeners("textFromAi", data: [
                             "chatId": chatId,
                             "text": token,
                             "isChunk": true
                         ])
+                        fullResponse += token
                     }
+                    chat.addTurn(userMessage: message, assistantMessage: fullResponse)
                     self.notifyListeners("aiFinished", data: ["chatId": chatId])
                     call.resolve()
                 } catch {
@@ -572,6 +601,12 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 }
             }
         }
+    }
+
+    private func isExecuTorchGenerating() -> Bool {
+        execuTorchGenerationLock.lock()
+        defer { execuTorchGenerationLock.unlock() }
+        return execuTorchIsGenerating
     }
 
     private func beginExecuTorchGeneration() -> Bool {
