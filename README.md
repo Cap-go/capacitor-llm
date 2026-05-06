@@ -37,12 +37,12 @@ bunx cap sync
 
 ### iOS Additional Setup for Custom Models
 
-Apple Intelligence works without bundled model files on supported iOS versions. For custom models, the plugin supports MediaPipe through CocoaPods and ExecuTorch through Swift Package Manager. CocoaPods remains iOS 15 compatible; Swift Package Manager requires iOS 17 because it links ExecuTorch.
+Apple Intelligence works without bundled model files on supported iOS versions. For custom models, the plugin supports MediaPipe through CocoaPods and ExecuTorch when the host app links ExecuTorch with Swift Package Manager. The plugin package remains iOS 15 compatible; iOS ExecuTorch requires an iOS 17 or newer app target because ExecuTorch requires iOS 17.
 
 **Using CocoaPods:**
 The MediaPipe dependencies are already configured in the podspec. Make sure to run `pod install` after adding the plugin.
 
-ExecuTorch is not provided by the CocoaPods integration. CocoaPods installs MediaPipe only. CocoaPods builds reject `engine: 'executorch'` with a clear runtime error; use the Swift Package Manager integration for iOS ExecuTorch.
+ExecuTorch is not provided by the CocoaPods integration. CocoaPods installs MediaPipe only. CocoaPods builds reject `engine: 'executorch'` with a clear runtime error unless the app also links ExecuTorch separately.
 
 **Note about Static Framework Warning:**
 When running `pod install`, you may see a warning about transitive dependencies with statically linked binaries. To fix this, update your Podfile:
@@ -75,7 +75,17 @@ end
 ```
 
 **Using Swift Package Manager:**
-The Swift Package Manager integration requires iOS 17 or newer and links the official ExecuTorch SwiftPM package branch `swiftpm-1.2.0` with `executorch_llm`, `backend_xnnpack`, `kernels_llm`, `kernels_optimized`, `kernels_quantized`, and `kernels_torchao`. MediaPipe GenAI still does not officially support SPM, so use CocoaPods for MediaPipe `.task` models.
+The plugin's `Package.swift` does not link ExecuTorch directly because that would force every Swift Package Manager user onto iOS 17 or newer, even when they only use Apple Intelligence or MediaPipe.
+
+To use ExecuTorch on iOS, add it to your app target:
+
+1. Set the app target deployment version to iOS 17 or newer.
+2. In Xcode, open the app project, select **Package Dependencies**, and add `https://github.com/pytorch/executorch.git`.
+3. Use the `swiftpm-1.2.0` branch, or the ExecuTorch branch that matches the runtime version you want.
+4. Add these products to the app target: `executorch_llm`, `backend_xnnpack`, `kernels_llm`, `kernels_optimized`, `kernels_quantized`, and `kernels_torchao`.
+5. Add the `.pte` model and tokenizer file to the app target's Copy Bundle Resources, or download them at runtime.
+
+If those ExecuTorch products are not linked into the app target, `setModel({ engine: 'executorch' })` rejects with a clear runtime error. MediaPipe GenAI still does not officially support SPM, so use CocoaPods for MediaPipe `.task` models.
 
 ## Adding a Model to Your App
 
@@ -83,7 +93,7 @@ The simplest cross-platform custom model path is ExecuTorch. It uses the same ki
 
 ### ExecuTorch Models (iOS and Android)
 
-iOS uses ExecuTorch through the Swift Package Manager integration. It is not included by CocoaPods, so a CocoaPods-only iOS install can use Apple Intelligence or MediaPipe but will refuse `engine: 'executorch'`. Android uses the ExecuTorch Maven package.
+iOS uses ExecuTorch only when the host app links the ExecuTorch Swift Package products. It is not included by CocoaPods or by the plugin's `Package.swift`, so an app without those products can use Apple Intelligence or MediaPipe but will refuse `engine: 'executorch'`. Android uses the ExecuTorch Maven package.
 
 Bundle the model files:
 
