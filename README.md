@@ -9,7 +9,7 @@
 
 Adds support for LLM locally run for Capacitor
 
-It uses Apple Intelligence (default) or MediaPipe custom models on iOS, and MediaPipe's tasks-genai on Android
+It uses Apple Intelligence for the iOS system model, MediaPipe for existing `.task` models, and ExecuTorch `.pte` models on both iOS and Android.
 
 **Mac Catalyst:** Native iOS functionality is disabled for Mac Catalyst builds. MediaPipe pods are skipped and native calls will return an unsupported response; use an iOS/iPadOS target for native features.
 
@@ -31,13 +31,13 @@ The most complete doc is available here: https://capgo.app/docs/plugins/llm/
 ## Installation
 
 ```bash
-npm install @capgo/capacitor-llm
-npx cap sync
+bun add @capgo/capacitor-llm
+bunx cap sync
 ```
 
 ### iOS Additional Setup for Custom Models
 
-If you want to use custom models on iOS (not just Apple Intelligence), you need to install MediaPipe dependencies.
+Apple Intelligence works without bundled model files on supported iOS versions. For custom models, the plugin supports MediaPipe through CocoaPods and ExecuTorch through Swift Package Manager.
 
 **Using CocoaPods:**
 The MediaPipe dependencies are already configured in the podspec. Make sure to run `pod install` after adding the plugin.
@@ -55,13 +55,13 @@ use_frameworks! :linkage => :static
 # And add this to your post_install hook:
 post_install do |installer|
   assertDeploymentTarget(installer)
-  
+
   # Fix for static framework dependencies
   installer.pods_project.targets.each do |target|
     target.build_configurations.each do |config|
       config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
     end
-    
+
     # Specifically for MediaPipe pods
     if target.name.include?('MediaPipeTasksGenAI')
       target.build_configurations.each do |config|
@@ -73,181 +73,83 @@ end
 ```
 
 **Using Swift Package Manager:**
-
-MediaPipe GenAI does not officially support SPM yet (see [MediaPipe issue #5464](https://github.com/google-ai-edge/mediapipe/issues/5464)). However, you can use the community package [SwiftTasksGenAI](https://github.com/paescebu/SwiftTasksGenAI) by adding it manually in Xcode:
-
-**To add MediaPipe GenAI via SPM:**
-1. Open your app project in Xcode
-2. Go to **File > Add Package Dependencies...**
-3. Enter the URL: `https://github.com/paescebu/SwiftTasksGenAI.git`
-4. Select your desired version (e.g., 0.10.27)
-5. Add the `SwiftTasksGenAI` product to your app target
-
-**Note:** SwiftTasksGenAI uses unsafe build flags, which means it cannot be added directly in Package.swift files, but works fine when added through Xcode's UI. This is the same approach used by SwiftTasksVision.
-
-**Alternatively:** Use CocoaPods for a more traditional setup, or use Apple Intelligence (iOS 18.2+) which works with both SPM and CocoaPods.
+The Swift package includes ExecuTorch products for `.pte` models. ExecuTorch currently requires iOS 17 or newer through SPM. MediaPipe GenAI still does not officially support SPM, so use CocoaPods for MediaPipe `.task` models.
 
 ## Adding a Model to Your App
 
-### iOS
+The simplest cross-platform custom model path is ExecuTorch. It uses the same kind of `.pte` model file on iOS and Android, plus a tokenizer file.
 
-On iOS, you have two options:
+### ExecuTorch Models (iOS and Android)
 
-1. **Apple Intelligence (Default)**: Uses the built-in system model (requires iOS 26.0+) - Recommended
-2. **Custom Models**: Use your own models via MediaPipe (requires CocoaPods) - Note: Some model formats may have compatibility issues
+iOS uses the ExecuTorch SwiftPM products from `Package.swift`. Android uses the ExecuTorch Maven package.
 
-#### Using Apple Intelligence (Default)
+Bundle the model files:
 
-No additional setup needed. The plugin will automatically use Apple Intelligence on supported devices (iOS 26.0+).
-
-#### Using Custom Models on iOS via MediaPipe
-
-**⚠️ IMPORTANT**: While MediaPipe documentation states Gemma-2 2B works on all platforms, iOS implementation has compatibility issues with `.task` format models, often resulting in `(prefill_input_names.size() % 2)==(0)` errors.
-
-## Model Compatibility Guide
-
-### Android (Working ✅)
-- **Model**: Gemma-3 models (270M, 1B, etc.)
-- **Format**: `.task` + `.litertlm` files
-- **Where to download**: 
-  - [Kaggle Gemma models](https://www.kaggle.com/models/google/gemma) - "LiteRT (formerly TFLite)" tab
-  - Example: `gemma-3-270m-it-int8.task` + `gemma-3-270m-it-int8.litertlm`
-
-### iOS (Limited Support ⚠️)
-- **Recommended**: Use Apple Intelligence (built-in, no download needed)
-- **Alternative (Experimental)**: 
-  - **Model**: Gemma-2 2B (documented as compatible but may still fail)
-  - **Format**: `.task` files (`.bin` format preferred but not available)
-  - **Where to download**:
-    - [Hugging Face MediaPipe models](https://huggingface.co/collections/google/mediapipe-668392ead2d6768e82fb3b87) 
-    - Look for `Gemma2-2B-IT_*_ekv*.task` files
-    - Example: `Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280.task`
-  - **Note**: Even with Gemma-2 2B, you may still encounter errors. Apple Intelligence is more reliable.
-
-### Web
-- **Model**: Gemma-3 models
-- **Format**: `.task` files
-- **Where to download**: Same as Android
-
-## Download Instructions
-
-1. **For Android**:
-   - Go to [Kaggle Gemma models](https://www.kaggle.com/models/google/gemma)
-   - Click "LiteRT (formerly TFLite)" tab
-   - Download both `.task` and `.litertlm` files
-   - Place in `android/app/src/main/assets/`
-
-2. **For iOS** (if not using Apple Intelligence):
-   - Visit [Hugging Face MediaPipe collection](https://huggingface.co/collections/google/mediapipe-668392ead2d6768e82fb3b87)
-   - Find Gemma-2 2B models
-   - Download `.task` files (and `.litertlm` if available)
-   - Add to Xcode project in "Copy Bundle Resources"
-   - Note: Success is not guaranteed due to format compatibility issues
-
-3. **Set the model path**:
+- iOS: add the `.pte` model and tokenizer file to your app target's Copy Bundle Resources.
+- Android: place the `.pte` model and tokenizer file under `android/app/src/main/assets/`, then reference them with `/android_asset/...`.
 
 ```typescript
+import { Capacitor } from '@capacitor/core';
 import { CapgoLLM } from '@capgo/capacitor-llm';
 
-// iOS - Use Apple Intelligence (default)
-await CapgoLLM.setModel({ path: 'Apple Intelligence' });
+const isAndroid = Capacitor.getPlatform() === 'android';
 
-// iOS - Use MediaPipe model (experimental)
-await CapgoLLM.setModel({ 
-  path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
-  modelType: 'task',
-  maxTokens: 1280
+await CapgoLLM.setModel({
+  engine: 'executorch',
+  path: isAndroid ? '/android_asset/model.pte' : 'model.pte',
+  tokenizerPath: isAndroid ? '/android_asset/tokenizer.model' : 'tokenizer.model',
+  maxTokens: 2048,
+  sequenceLength: 2048,
+  temperature: 0.8,
 });
 
-// Now you can create chats and send messages
-const chat = await CapgoLLM.createChat();
+const { id: chatId } = await CapgoLLM.createChat();
 ```
 
-### Android
+`engine: 'auto'` also selects ExecuTorch when the model path ends in `.pte` or when `tokenizerPath` is provided. Passing `engine: 'executorch'` is recommended when loading ExecuTorch models so failures are explicit.
 
-For Android, you need to include a compatible LLM model in your app. The plugin uses MediaPipe's tasks-genai, which supports various model formats.
+### MediaPipe Models
 
-When Gemini mini will be out of close alpha we might add it as default like we do Apple intelligence default
-https://developer.android.com/ai/gemini-nano/experimental
-
-**Important:** Your app's `minSdkVersion` must be set to 24 or higher. Update your `android/variables.gradle` file:
-```gradle
-ext {
-    minSdkVersion = 24
-    // ... other settings
-}
-```
-
-1. **Download a compatible model**: 
-   
-   **For Android: Gemma 3 Models** (Working ✅)
-   - **Recommended**: Gemma 3 270M - Smallest, most efficient (~240-400MB)
-   - Text-only model optimized for on-device inference
-   - Download from [Kaggle](https://www.kaggle.com/models/google/gemma) → "LiteRT (formerly TFLite)" tab
-   - Get both `.task` and `.litertlm` files
-   
-   **For iOS: Limited Options** (⚠️)
-   - **Option 1** (Recommended): Use Apple Intelligence - no download needed
-   - **Option 2** (Experimental): Try Gemma-2 2B from [Hugging Face](https://huggingface.co/collections/google/mediapipe-668392ead2d6768e82fb3b87)
-     - Download `Gemma2-2B-IT_*.task` files  
-     - May still encounter compatibility errors
-   
-   **Available Model Sizes** (from [Google AI](https://ai.google.dev/gemma/docs/core#sizes)):
-   - `gemma-3-270m` - Most portable, text-only (~240-400MB) - Android only
-   - `gemma-3-1b` - Larger text-only (~892MB-1.5GB) - Android only
-   - `gemma-2-2b` - Cross-platform compatible (~1-2GB) - iOS experimental
-   - Larger models available but not recommended for mobile
-   
-   For automated download, see the script in the example app section below.
-
-2. **Add the model to your app**:
-   
-   **Option A - Bundle in APK (for smaller models)**:
-   - Place the model files in your app's `android/app/src/main/assets/` directory
-   - The `/android_asset/` prefix is used to reference files from the assets folder
-   - Note: This approach may increase APK size significantly
-   
-   **Option B - Download at runtime (recommended for production)**:
-   - Host the model files on a server
-   - Download them to your app's files directory at runtime
-   - This keeps your APK size small
-
-3. **Set the model path**:
+MediaPipe remains available for existing `.task` models. Android models usually need both `.task` and `.litertlm` files. iOS MediaPipe support is available through CocoaPods and remains experimental for some `.task` files.
 
 ```typescript
-import { CapgoLLM } from '@capgo/capacitor-llm';
+await CapgoLLM.setModel({
+  path: '/android_asset/gemma-3-270m-it-int8.task',
+  modelType: 'task',
+  maxTokens: 2048,
+  topk: 40,
+  temperature: 0.8,
+});
+```
 
-// If model is in assets folder (recommended) - point to the .task file
-await CapgoLLM.setModelPath({ path: '/android_asset/gemma-3-270m-it-int8.task' });
+### Apple Intelligence
 
-// If model is in app's files directory
-await CapgoLLM.setModelPath({ path: '/data/data/com.yourapp/files/gemma-3-270m-it-int8.task' });
+On supported iOS devices, Apple Intelligence can be used without bundling a model.
 
-// Example: Download model at runtime (recommended for production)
-async function downloadModel() {
-  // Add progress listener
-  await CapgoLLM.addListener('downloadProgress', (event) => {
-    console.log(`Download progress: ${event.progress}%`);
-  });
+```typescript
+await CapgoLLM.setModel({
+  path: 'Apple Intelligence',
+  engine: 'apple',
+});
+```
 
-  // Download the model
-  const result = await CapgoLLM.downloadModel({
-    url: 'https://your-server.com/models/gemma-3-270m-it-int8.task',
-    companionUrl: 'https://your-server.com/models/gemma-3-270m-it-int8.litertlm', // Android only
-    filename: 'gemma-3-270m-it-int8.task' // Optional, defaults to filename from URL
-  });
+### Downloading Models at Runtime
 
-  console.log('Model downloaded to:', result.path);
-  if (result.companionPath) {
-    console.log('Companion file downloaded to:', result.companionPath);
-  }
+Use `downloadModel` to keep large model files out of the app bundle. For ExecuTorch, `companionUrl` can point at the tokenizer file.
 
-  // Now set the model path
-  await CapgoLLM.setModelPath({ path: result.path });
-}
+```typescript
+const result = await CapgoLLM.downloadModel({
+  url: 'https://your-server.com/models/model.pte',
+  companionUrl: 'https://your-server.com/models/tokenizer.model',
+  filename: 'model.pte',
+});
 
-// Now you can create chats and send messages
-const chat = await CapgoLLM.createChat();
+await CapgoLLM.setModel({
+  engine: 'executorch',
+  path: result.path,
+  tokenizerPath: result.companionPath,
+  sequenceLength: 2048,
+});
 ```
 
 ## Usage Example
@@ -255,34 +157,22 @@ const chat = await CapgoLLM.createChat();
 ```typescript
 import { CapgoLLM } from '@capgo/capacitor-llm';
 
-// Check if LLM is ready
 const { readiness } = await CapgoLLM.getReadiness();
 console.log('LLM readiness:', readiness);
 
-// Set a custom model (optional - uses system default if not called)
-// iOS: Use a GGUF model from bundle or path
-// Android: Use a MediaPipe model from assets or files
-await CapgoLLM.setModelPath({ 
-  path: Platform.isIOS ? 'gemma-3-270m.gguf' : '/android_asset/gemma-3-270m-it-int8.task' 
-});
-
-// Create a chat session
 const { id: chatId } = await CapgoLLM.createChat();
 
-// Listen for AI responses
 CapgoLLM.addListener('textFromAi', (event) => {
   console.log('AI:', event.text);
 });
 
-// Listen for completion
 CapgoLLM.addListener('aiFinished', (event) => {
   console.log('AI finished responding to chat:', event.chatId);
 });
 
-// Send a message
 await CapgoLLM.sendMessage({
   chatId,
-  message: 'Hello! How are you today?'
+  message: 'Hello! How are you today?',
 });
 ```
 
@@ -357,8 +247,8 @@ setModel(options: ModelOptions) => Promise<void>
 ```
 
 Sets the model configuration
-- iOS: Use "Apple Intelligence" as path for system model, or provide path to MediaPipe model
-- Android: Path to a MediaPipe model file (in assets or files directory)
+- iOS: Use "Apple Intelligence" as path for system model, provide a MediaPipe model, or set engine to "executorch"
+- Android: Path to a MediaPipe or ExecuTorch model file (in assets or files directory)
 
 | Param         | Type                                                  | Description               |
 | ------------- | ----------------------------------------------------- | ------------------------- |
@@ -480,14 +370,18 @@ Get the native Capacitor plugin version.
 
 Model configuration options
 
-| Prop              | Type                | Description                                                                                                |
-| ----------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for iOS system model                                                    |
-| **`modelType`**   | <code>string</code> | Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path. |
-| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                 |
-| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                          |
-| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                               |
-| **`randomSeed`**  | <code>number</code> | Random seed for generation                                                                                 |
+| Prop                 | Type                                                          | Description                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`path`**           | <code>string</code>                                           | Model path or "Apple Intelligence" for iOS system model                                                                                                                                                                                                                                                                           |
+| **`engine`**         | <code>'auto' \| 'apple' \| 'mediapipe' \| 'executorch'</code> | Runtime engine to use. - "auto": uses Apple Intelligence on iOS when path is "Apple Intelligence", ExecuTorch for `.pte` or tokenizerPath, otherwise MediaPipe - "apple": iOS Foundation Models / Apple Intelligence - "mediapipe": MediaPipe GenAI `.task` models - "executorch": ExecuTorch `.pte` models with a tokenizer file |
+| **`modelType`**      | <code>string</code>                                           | Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path.                                                                                                                                                                                                                        |
+| **`tokenizerPath`**  | <code>string</code>                                           | Tokenizer path for ExecuTorch models. Required when engine is "executorch".                                                                                                                                                                                                                                                       |
+| **`specialTokens`**  | <code>string[]</code>                                         | Optional special tokens passed to ExecuTorch tokenizers when supported.                                                                                                                                                                                                                                                           |
+| **`maxTokens`**      | <code>number</code>                                           | Maximum number of tokens the model handles                                                                                                                                                                                                                                                                                        |
+| **`sequenceLength`** | <code>number</code>                                           | Sequence length for ExecuTorch generation. Defaults to maxTokens when omitted.                                                                                                                                                                                                                                                    |
+| **`topk`**           | <code>number</code>                                           | Number of tokens the model considers at each step                                                                                                                                                                                                                                                                                 |
+| **`temperature`**    | <code>number</code>                                           | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                                                                                                      |
+| **`randomSeed`**     | <code>number</code>                                           | Random seed for generation                                                                                                                                                                                                                                                                                                        |
 
 
 #### DownloadModelResult
@@ -554,92 +448,27 @@ Event data for readiness status changes
 
 ## Example App Model Setup
 
-The example app demonstrates how to use custom models with the Capacitor LLM plugin.
+The example app can use either the older MediaPipe assets or the new ExecuTorch assets.
 
-### Downloading Models
+### Recommended Custom Path: ExecuTorch
 
-Since AI models require license acceptance, you need to download them manually:
+1. Export or download an ExecuTorch `.pte` model and matching tokenizer file.
+2. Add both files to the iOS app bundle, or place both files in `example-app/android/app/src/main/assets/` for Android.
+3. Call `setModel` with `engine: 'executorch'`, `path`, and `tokenizerPath`.
 
-### Model Setup by Platform
+### Legacy MediaPipe Path
 
-#### Android Setup (Gemma 3 270M) ✅
+Android still supports Gemma 3 LiteRT assets from Kaggle. Download both files and place them in `example-app/android/app/src/main/assets/`:
 
-1. **Create Kaggle account and accept license:**
-   - Create a [Kaggle account](https://www.kaggle.com)
-   - Visit [Gemma 3 models](https://www.kaggle.com/models/google/gemma-3) and accept terms
+- `gemma-3-270m-it-int8.task`
+- `gemma-3-270m-it-int8.litertlm`
 
-2. **Download the model:**
-   - Click "LiteRT (formerly TFLite)" tab
-   - Download `gemma-3-270m-it-int8` (get BOTH files):
-     - `gemma-3-270m-it-int8.task`
-     - `gemma-3-270m-it-int8.litertlm`
-
-3. **Place in Android app:**
-   - Copy BOTH files to: `example-app/android/app/src/main/assets/`
-   - In code, reference with `/android_asset/` prefix
-
-#### iOS Setup ⚠️
-
-**Option 1 (Recommended)**: Use Apple Intelligence
-- No model download needed
-- Works out of the box on iOS 26.0+
-
-**Option 2 (Experimental)**: Try Gemma-2 2B
-1. Visit [Hugging Face MediaPipe models](https://huggingface.co/collections/google/mediapipe-668392ead2d6768e82fb3b87)
-2. Download Gemma-2 2B files (e.g., `Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280.task`)
-3. Add to Xcode project in "Copy Bundle Resources"
-4. Note: May still encounter errors - Apple Intelligence is more reliable
-### Update your code to use the model:
-```typescript
-// Android - Gemma 3 270M
-await CapgoLLM.setModel({ 
-  path: '/android_asset/gemma-3-270m-it-int8.task',
-  maxTokens: 2048,
-  topk: 40,
-  temperature: 0.8
-});
-
-// iOS Option 1 - Apple Intelligence (Recommended)
-await CapgoLLM.setModel({ 
-  path: 'Apple Intelligence' 
-});
-
-// iOS Option 2 - Gemma-2 2B (Experimental)
-await CapgoLLM.setModel({ 
-  path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
-  modelType: 'task',
-  maxTokens: 1280,
-  topk: 40,
-  temperature: 0.8
-});
-```
-
-### Model Selection Guide
-
-**For Android**: Gemma 3 270M is recommended because:
-- Smallest size (~240-400MB)
-- Text-only (perfect for chat)
-- Optimized for mobile devices
-- Works reliably with MediaPipe
-
-**For iOS**: Apple Intelligence is recommended because:
-- No download required
-- Native iOS integration
-- Better performance
-- No compatibility issues
+iOS MediaPipe remains experimental because some `.task` models can fail during prefill. Apple Intelligence or ExecuTorch is preferred on iOS.
 
 ## Known Issues
 
-- **iOS MediaPipe Compatibility**: MediaPipe iOS SDK has issues with `.task` format models
-  - Symptom: `(prefill_input_names.size() % 2)==(0)` errors
-  - Solution: Use Apple Intelligence (built-in) instead of custom models
-  - Alternative: Try Gemma-2 2B models (experimental, may still fail)
-
-- **Platform Requirements**:
-  - iOS: Apple Intelligence requires iOS 26.0+
-  - Android: Minimum SDK 24
-
-- **Performance Considerations**:
-  - Model files are large (300MB-2GB)
-  - Initial download takes time
-  - Some devices may have memory limitations
+- ExecuTorch is native-only and is not available on web.
+- ExecuTorch through Swift Package Manager requires iOS 17 or newer.
+- Apple Intelligence requires iOS 26.0 or later and a supported device.
+- Android requires minSdkVersion 24 or higher.
+- Model files are large, so production apps should usually download them after install.

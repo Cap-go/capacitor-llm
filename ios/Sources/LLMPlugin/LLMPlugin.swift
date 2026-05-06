@@ -8,6 +8,9 @@ import FoundationModels
 #if canImport(MediaPipeTasksGenAI) && !targetEnvironment(macCatalyst)
 import MediaPipeTasksGenAI
 #endif
+#if canImport(ExecuTorchLLM)
+import ExecuTorchLLM
+#endif
 
 /**
  * Please read the Capacitor iOS Plugin Development Guide
@@ -34,6 +37,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private enum ModelType {
         case appleIntelligence
         case mediaPipe
+        case execuTorch
     }
 
     private var currentModelType: ModelType = .appleIntelligence
@@ -56,6 +60,12 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var llmInference: LlmInference?
     #endif
 
+    #if canImport(ExecuTorchLLM)
+    private var execuTorchRunner: TextRunner?
+    private var execuTorchSequenceLength = 2048
+    private var execuTorchTemperature = 0.8
+    #endif
+
     @objc func setModel(_ call: CAPPluginCall) {
         guard let path = call.getString("path") else {
             call.reject("Path is required")
@@ -74,12 +84,29 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         let topk = call.getInt("topk") ?? 40
         let temperature = call.getFloat("temperature") ?? 0.8
         let modelType = call.getString("modelType") // Optional model type parameter
+        let engine = call.getString("engine")?.lowercased() ?? "auto"
+        let tokenizerPath = call.getString("tokenizerPath")
+        let specialTokens = call.getArray("specialTokens", String.self) ?? []
+        let sequenceLength = call.getInt("sequenceLength") ?? maxTokens
 
         modelPath = path
         isReady = false
 
+        if shouldUseExecuTorch(engine: engine, path: path, tokenizerPath: tokenizerPath) {
+            setExecuTorchModel(
+                call,
+                path: path,
+                tokenizerPath: tokenizerPath,
+                modelType: modelType,
+                specialTokens: specialTokens,
+                sequenceLength: sequenceLength,
+                temperature: temperature
+            )
+            return
+        }
+
         // Check if user wants to use Apple Intelligence
-        if path.lowercased() == "apple intelligence" {
+        if engine == "apple" || path.lowercased() == "apple intelligence" {
             print("[CapgoLLM] Switching to Apple Intelligence")
             currentModelType = .appleIntelligence
             isReady = true
@@ -163,6 +190,96 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         #endif
     }
 
+    private func shouldUseExecuTorch(engine: String, path: String, tokenizerPath: String?) -> Bool {
+        if engine == "executorch" {
+            return true
+        }
+        if engine == "apple" || engine == "mediapipe" {
+            return false
+        }
+        if tokenizerPath?.isEmpty == false {
+            return true
+        }
+        return path.lowercased().hasSuffix(".pte")
+    }
+
+    private func setExecuTorchModel(
+        _ call: CAPPluginCall,
+        path: String,
+        tokenizerPath: String?,
+        modelType: String?,
+        specialTokens: [String],
+        sequenceLength: Int,
+        temperature: Float
+    ) {
+        #if canImport(ExecuTorchLLM)
+        guard let tokenizerPath = tokenizerPath, !tokenizerPath.isEmpty else {
+            call.reject("tokenizerPath is required for ExecuTorch models")
+            return
+        }
+
+        Task {
+            do {
+                let modelURL = try resolveModelURL(path: path, modelType: modelType, defaultExtension: "pte")
+                let tokenizerURL = try resolveModelURL(path: tokenizerPath, modelType: nil, defaultExtension: "model")
+
+                print("[CapgoLLM] Initializing ExecuTorch with model at: \(modelURL.path)")
+                print("[CapgoLLM] Initializing ExecuTorch with tokenizer at: \(tokenizerURL.path)")
+
+                let runner = TextRunner(
+                    modelPath: modelURL.path,
+                    tokenizerPath: tokenizerURL.path,
+                    specialTokens: specialTokens
+                )
+                try runner.load()
+
+                execuTorchRunner = runner
+                execuTorchSequenceLength = sequenceLength
+                execuTorchTemperature = Double(temperature)
+                currentModelType = .execuTorch
+                isReady = true
+
+                notifyListeners("readinessChange", data: ["readiness": "ready"])
+                call.resolve()
+            } catch {
+                print("[CapgoLLM] Error loading ExecuTorch model: \(error.localizedDescription)")
+                notifyListeners("readinessChange", data: ["readiness": "Failed to load ExecuTorch model: \(error.localizedDescription)"])
+                call.reject("Failed to load ExecuTorch model: \(error.localizedDescription)")
+            }
+        }
+        #else
+        call.reject("ExecuTorch is not available in this iOS build. Use the Swift Package Manager integration.")
+        #endif
+    }
+
+    private func resolveModelURL(path: String, modelType: String?, defaultExtension: String) throws -> URL {
+        if path.hasPrefix("/") {
+            return URL(fileURLWithPath: path)
+        }
+
+        let fileName: String
+        let fileExtension: String
+
+        if let providedType = modelType, !providedType.isEmpty {
+            fileName = (path as NSString).deletingPathExtension
+            fileExtension = providedType
+        } else {
+            fileName = (path as NSString).deletingPathExtension
+            let extractedExtension = (path as NSString).pathExtension
+            fileExtension = extractedExtension.isEmpty ? defaultExtension : extractedExtension
+        }
+
+        guard let bundlePath = Bundle.main.path(forResource: fileName, ofType: fileExtension) else {
+            throw NSError(
+                domain: "CapgoLLM",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Model file not found in bundle: \(path)"]
+            )
+        }
+
+        return URL(fileURLWithPath: bundlePath)
+    }
+
     @objc func createChat(_ call: CAPPluginCall) {
         #if targetEnvironment(macCatalyst)
         call.reject(catalystNotSupportedMessage)
@@ -205,6 +322,21 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #else
             call.reject("MediaPipe is not available on this platform. Please install via CocoaPods on iOS.")
             #endif
+
+        case .execuTorch:
+            #if canImport(ExecuTorchLLM)
+            guard execuTorchRunner != nil else {
+                call.reject("ExecuTorch model not loaded")
+                return
+            }
+            let id = UUID().uuidString
+            print("[CapgoLLM] Created ExecuTorch chat with ID: \(id)")
+            call.resolve([
+                "id": id
+            ])
+            #else
+            call.reject("ExecuTorch is not available in this iOS build")
+            #endif
         }
     }
 
@@ -246,6 +378,9 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .mediaPipe:
+            return isReady ? "ready" : "not_ready"
+
+        case .execuTorch:
             return isReady ? "ready" : "not_ready"
         }
     }
@@ -383,6 +518,37 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             }
             #else
             call.reject("MediaPipe is not available on this platform. Please install via CocoaPods on iOS.")
+            #endif
+
+        case .execuTorch:
+            #if canImport(ExecuTorchLLM)
+            guard let runner = execuTorchRunner else {
+                call.reject("ExecuTorch model not loaded")
+                return
+            }
+
+            Task {
+                do {
+                    print("[CapgoLLM] Attempting to generate ExecuTorch response for message: \(message)")
+                    try runner.generate(message, Config {
+                        $0.temperature = execuTorchTemperature
+                        $0.sequenceLength = execuTorchSequenceLength
+                    }) { token in
+                        self.notifyListeners("textFromAi", data: [
+                            "chatId": chatId,
+                            "text": token,
+                            "isChunk": true
+                        ])
+                    }
+                    self.notifyListeners("aiFinished", data: ["chatId": chatId])
+                    call.resolve()
+                } catch {
+                    print("[CapgoLLM] ExecuTorch error details: \(error)")
+                    call.reject("Failed to generate ExecuTorch response: \(error.localizedDescription)")
+                }
+            }
+            #else
+            call.reject("ExecuTorch is not available in this iOS build")
             #endif
         }
     }
