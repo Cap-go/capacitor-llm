@@ -78,6 +78,9 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var execuTorchRunner: DynamicExecuTorchRunner?
     private var execuTorchChats: [String: ExecuTorchChatSession] = [:]
     private let execuTorchGenerationLock = NSLock()
+    private let execuTorchNotLinkedMessage = "ExecuTorch is not linked in this iOS app. " +
+        "It is not installed by CocoaPods; add the ExecuTorch Swift Package products " +
+        "to the app target on iOS 17+ or choose another engine."
     private var execuTorchIsGenerating = false
 
     @objc func setModel(_ call: CAPPluginCall) {
@@ -257,7 +260,9 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         guard DynamicExecuTorchRunner.isAvailable else {
-            call.reject("ExecuTorch is not linked in this iOS app. Add the ExecuTorch Swift Package products to the app target.")
+            isReady = false
+            notifyListeners("readinessChange", data: ["readiness": execuTorchNotLinkedMessage])
+            call.reject(execuTorchNotLinkedMessage)
             return
         }
 

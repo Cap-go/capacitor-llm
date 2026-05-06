@@ -42,6 +42,8 @@ Apple Intelligence works without bundled model files on supported iOS versions. 
 **Using CocoaPods:**
 The MediaPipe dependencies are already configured in the podspec. Make sure to run `pod install` after adding the plugin.
 
+ExecuTorch is not provided by the CocoaPods integration. CocoaPods installs MediaPipe only. If your iOS app uses `engine: 'executorch'`, you must also add the ExecuTorch Swift Package products to the app target; otherwise the plugin rejects `setModel` with a clear runtime error.
+
 **Note about Static Framework Warning:**
 When running `pod install`, you may see a warning about transitive dependencies with statically linked binaries. To fix this, update your Podfile:
 
@@ -81,7 +83,7 @@ The simplest cross-platform custom model path is ExecuTorch. It uses the same ki
 
 ### ExecuTorch Models (iOS and Android)
 
-iOS uses ExecuTorch when the app target links the ExecuTorch SwiftPM products. Android uses the ExecuTorch Maven package.
+iOS uses ExecuTorch only when the app target links the ExecuTorch SwiftPM products. It is not included by CocoaPods, so a CocoaPods-only iOS install can use Apple Intelligence or MediaPipe but will refuse `engine: 'executorch'`. Android uses the ExecuTorch Maven package.
 
 Bundle the model files:
 
