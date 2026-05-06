@@ -178,7 +178,7 @@ export interface ModelOptions {
   modelType?: string;
   /** Tokenizer path for ExecuTorch models. Required when engine is "executorch". */
   tokenizerPath?: string;
-  /** Optional special tokens passed to ExecuTorch tokenizers when supported. */
+  /** Optional special tokens passed to iOS ExecuTorch tokenizers. */
   specialTokens?: string[];
   /** Maximum number of tokens the model handles */
   maxTokens?: number;

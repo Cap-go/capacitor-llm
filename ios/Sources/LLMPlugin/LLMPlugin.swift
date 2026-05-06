@@ -86,8 +86,25 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         let specialTokens = call.getArray("specialTokens", String.self) ?? []
         let sequenceLength = call.getInt("sequenceLength") ?? maxTokens
 
+        guard sequenceLength > 0 else {
+            call.reject("sequenceLength must be > 0")
+            return
+        }
+
         modelPath = path
         isReady = false
+
+        // Check if user wants to use Apple Intelligence
+        if engine == "apple" || path.lowercased() == "apple intelligence" {
+            print("[CapgoLLM] Switching to Apple Intelligence")
+            execuTorchRunner = nil
+            finishExecuTorchGeneration()
+            currentModelType = .appleIntelligence
+            isReady = true
+            notifyListeners("readinessChange", data: ["readiness": "ready"])
+            call.resolve()
+            return
+        }
 
         if shouldUseExecuTorch(engine: engine, path: path, tokenizerPath: tokenizerPath) {
             setExecuTorchModel(
@@ -99,16 +116,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 sequenceLength: sequenceLength,
                 temperature: temperature
             )
-            return
-        }
-
-        // Check if user wants to use Apple Intelligence
-        if engine == "apple" || path.lowercased() == "apple intelligence" {
-            print("[CapgoLLM] Switching to Apple Intelligence")
-            currentModelType = .appleIntelligence
-            isReady = true
-            notifyListeners("readinessChange", data: ["readiness": "ready"])
-            call.resolve()
             return
         }
 
@@ -188,6 +195,9 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func shouldUseExecuTorch(engine: String, path: String, tokenizerPath: String?) -> Bool {
+        if path.lowercased() == "apple intelligence" {
+            return false
+        }
         if engine == "executorch" {
             return true
         }
@@ -209,6 +219,14 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         sequenceLength: Int,
         temperature: Float
     ) {
+        execuTorchRunner = nil
+        finishExecuTorchGeneration()
+
+        guard sequenceLength > 0 else {
+            call.reject("sequenceLength must be > 0")
+            return
+        }
+
         guard DynamicExecuTorchRunner.isAvailable else {
             call.reject("ExecuTorch is not linked in this iOS app. Add the ExecuTorch Swift Package products to the app target.")
             return
@@ -240,6 +258,8 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 notifyListeners("readinessChange", data: ["readiness": "ready"])
                 call.resolve()
             } catch {
+                execuTorchRunner = nil
+                isReady = false
                 print("[CapgoLLM] Error loading ExecuTorch model: \(error.localizedDescription)")
                 notifyListeners("readinessChange", data: ["readiness": "Failed to load ExecuTorch model: \(error.localizedDescription)"])
                 call.reject("Failed to load ExecuTorch model: \(error.localizedDescription)")
@@ -512,7 +532,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             #endif
 
         case .execuTorch:
-            guard let runner = execuTorchRunner else {
+            guard isReady, let runner = execuTorchRunner else {
                 call.reject("ExecuTorch model not loaded")
                 return
             }
@@ -676,8 +696,23 @@ private typealias ExecuTorchGenerateFunction = @convention(c) (
 private typealias ExecuTorchVoidFunction = @convention(c) (AnyObject, Selector) -> Void
 
 private final class DynamicExecuTorchRunner {
+    private static let runnerInitSelector = NSSelectorFromString("initWithModelPath:tokenizerPath:specialTokens:")
+    private static let runnerLoadSelector = NSSelectorFromString("loadWithError:")
+    private static let runnerResetSelector = NSSelectorFromString("reset")
+    private static let runnerGenerateSelector = NSSelectorFromString("generateWithPrompt:config:tokenCallback:error:")
+    private static let configInitSelector = NSSelectorFromString("initWithBlock:")
+
     static var isAvailable: Bool {
-        findClass("ExecuTorchLLMTextRunner") != nil && findClass("ExecuTorchLLMConfig") != nil
+        guard let runnerClass = findClass("ExecuTorchLLMTextRunner"),
+              let configClass = findClass("ExecuTorchLLMConfig") else {
+            return false
+        }
+
+        return hasInstanceMethod(runnerClass, runnerInitSelector) &&
+            hasInstanceMethod(runnerClass, runnerLoadSelector) &&
+            hasInstanceMethod(runnerClass, runnerResetSelector) &&
+            hasInstanceMethod(runnerClass, runnerGenerateSelector) &&
+            hasInstanceMethod(configClass, configInitSelector)
     }
 
     private let runner: AnyObject
@@ -694,6 +729,8 @@ private final class DynamicExecuTorchRunner {
         guard let runnerClass = Self.findClass("ExecuTorchLLMTextRunner") else {
             throw Self.error("ExecuTorchLLMTextRunner was not found. Link ExecuTorch in the app target.")
         }
+        try Self.requireInstanceMethod(Self.runnerInitSelector, on: runnerClass)
+        try Self.requireInstanceMethod(Self.runnerLoadSelector, on: runnerClass)
 
         let alloc: ExecuTorchAllocFunction = try Self.objcMessage()
         let initRunner: ExecuTorchInitRunnerFunction = try Self.objcMessage()
@@ -702,7 +739,7 @@ private final class DynamicExecuTorchRunner {
         let allocatedRunner = alloc(runnerClass, NSSelectorFromString("alloc")).takeRetainedValue()
         runner = initRunner(
             allocatedRunner,
-            NSSelectorFromString("initWithModelPath:tokenizerPath:specialTokens:"),
+            Self.runnerInitSelector,
             modelPath as NSString,
             tokenizerPath as NSString,
             specialTokens as NSArray
@@ -711,7 +748,7 @@ private final class DynamicExecuTorchRunner {
         self.temperature = temperature
 
         var loadError: NSError?
-        guard load(runner, NSSelectorFromString("loadWithError:"), &loadError) else {
+        guard load(runner, Self.runnerLoadSelector, &loadError) else {
             throw loadError ?? Self.error("ExecuTorch model failed to load")
         }
     }
@@ -720,13 +757,19 @@ private final class DynamicExecuTorchRunner {
         guard let configClass = Self.findClass("ExecuTorchLLMConfig") else {
             throw Self.error("ExecuTorchLLMConfig was not found. Link ExecuTorch in the app target.")
         }
+        guard let runnerClass = object_getClass(runner) else {
+            throw Self.error("ExecuTorch runner class was not found")
+        }
+        try Self.requireInstanceMethod(Self.runnerResetSelector, on: runnerClass)
+        try Self.requireInstanceMethod(Self.runnerGenerateSelector, on: runnerClass)
+        try Self.requireInstanceMethod(Self.configInitSelector, on: configClass)
 
         let sendVoid: ExecuTorchVoidFunction = try Self.objcMessage()
         let alloc: ExecuTorchAllocFunction = try Self.objcMessage()
         let initConfig: ExecuTorchInitConfigFunction = try Self.objcMessage()
         let generate: ExecuTorchGenerateFunction = try Self.objcMessage()
 
-        sendVoid(runner, NSSelectorFromString("reset"))
+        sendVoid(runner, Self.runnerResetSelector)
 
         let allocatedConfig = alloc(configClass, NSSelectorFromString("alloc")).takeRetainedValue()
         let configBlock: ExecuTorchConfigBlock = { [temperature, sequenceLength] config in
@@ -735,7 +778,7 @@ private final class DynamicExecuTorchRunner {
         }
         let config = initConfig(
             allocatedConfig,
-            NSSelectorFromString("initWithBlock:"),
+            Self.configInitSelector,
             configBlock
         ).takeRetainedValue()
 
@@ -745,7 +788,7 @@ private final class DynamicExecuTorchRunner {
         var generateError: NSError?
         guard generate(
             runner,
-            NSSelectorFromString("generateWithPrompt:config:tokenCallback:error:"),
+            Self.runnerGenerateSelector,
             prompt as NSString,
             config,
             callback,
@@ -760,6 +803,16 @@ private final class DynamicExecuTorchRunner {
             throw error("Unable to resolve objc_msgSend")
         }
         return unsafeBitCast(symbol, to: Function.self)
+    }
+
+    private static func requireInstanceMethod(_ selector: Selector, on cls: AnyClass) throws {
+        guard hasInstanceMethod(cls, selector) else {
+            throw error("ExecuTorch API selector missing: \(NSStringFromSelector(selector))")
+        }
+    }
+
+    private static func hasInstanceMethod(_ cls: AnyClass, _ selector: Selector) -> Bool {
+        class_getInstanceMethod(cls, selector) != nil
     }
 
     private static func findClass(_ name: String) -> AnyClass? {

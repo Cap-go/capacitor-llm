@@ -106,6 +106,16 @@ public class LLMPlugin extends Plugin {
         Float temperature = call.getFloat("temperature", 0.8f);
         List<String> specialTokens = getStringList(call.getArray("specialTokens"));
 
+        if (sequenceLength <= 0) {
+            call.reject("sequenceLength must be > 0");
+            return;
+        }
+
+        if (!specialTokens.isEmpty()) {
+            call.reject("specialTokens are only supported by ExecuTorch on iOS");
+            return;
+        }
+
         llm.setModel(
             path,
             engine,
