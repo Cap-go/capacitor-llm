@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:e2e": "cypress run",
     "test:unit": "vitest",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "capgo:deploy": "cd .. && bun run example:capgo:deploy"
   },
   "dependencies": {
     "@capacitor/app": "7.0.1",
@@ -25,7 +26,8 @@
     "ionicons": "^7.0.0",
     "marked": "^15.0.12",
     "vue": "^3.3.0",
-    "vue-router": "^4.2.0"
+    "vue-router": "^4.2.0",
+    "@capgo/capacitor-updater": "^8.45.11"
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",

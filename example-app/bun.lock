@@ -13,6 +13,7 @@
         "@capacitor/keyboard": "7.0.1",
         "@capacitor/status-bar": "7.0.1",
         "@capgo/capacitor-llm": "file:..",
+        "@capgo/capacitor-updater": "^8.45.11",
         "@ionic/vue": "^8.0.0",
         "@ionic/vue-router": "^8.0.0",
         "ionicons": "^7.0.0",
@@ -236,6 +237,8 @@
     "@capacitor/status-bar": ["@capacitor/status-bar@7.0.1", "", { "peerDependencies": { "@capacitor/core": ">=7.0.0" } }, "sha512-iDv3mXYo9CdxYRVwt3/pRyuk25p7Sn4GfaS/zMZyVIqTzsvKLCIIH3GdKK+ta+nsNcAVpCw/t5jFEBt1D18ctA=="],
 
     "@capgo/capacitor-llm": ["@capgo/capacitor-llm@file:..", { "devDependencies": { "@capacitor/android": "^7.0.0", "@capacitor/core": "^7.0.0", "@capacitor/docgen": "^0.3.0", "@capacitor/ios": "^7.0.0", "@ionic/eslint-config": "^0.4.0", "@ionic/prettier-config": "^4.0.0", "@ionic/swiftlint-config": "^2.0.0", "@webgpu/types": "^0.1.64", "eslint": "^8.57.0", "google-protobuf": "^3.21.4", "prettier": "^3.4.2", "prettier-plugin-java": "^2.6.6", "rimraf": "^6.0.1", "rollup": "^4.30.1", "swiftlint": "^2.0.0", "typescript": "~4.1.5" }, "peerDependencies": { "@capacitor/core": ">=7.0.0", "@mediapipe/tasks-genai": "^0.10.27" } }],
+
+    "@capgo/capacitor-updater": ["@capgo/capacitor-updater@8.47.10", "", { "peerDependencies": { "@capacitor/core": "^8.0.0" } }, "sha512-T/x2Lu9WXknYzCGLKNv1tVaV+UDqBONFI5I2iXg9I5IOSm7Q60DtHuAWckT1BHzszEZ/XqkMqh89cXhhEesViA=="],
 
     "@chevrotain/cst-dts-gen": ["@chevrotain/cst-dts-gen@11.0.3", "", { "dependencies": { "@chevrotain/gast": "11.0.3", "@chevrotain/types": "11.0.3", "lodash-es": "4.17.21" } }, "sha512-BvIKpRLeS/8UbfxXxgC33xOumsacaeCKAjAeLyOn7Pcp95HiRbrpl14S+9vaZLolnbssPIUuiUd8IvgkRyt6NQ=="],
 
