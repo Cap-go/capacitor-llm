@@ -6,8 +6,8 @@ const config: CapacitorConfig = {
   appName: 'LLM Example',
   webDir: 'dist',
   android: {
-    adjustMarginsForEdgeToEdge: 'auto'
-  }
+    adjustMarginsForEdgeToEdge: 'auto',
+  },
   plugins: {
     CapacitorUpdater: {
       appId: 'app.capgo.llm',
