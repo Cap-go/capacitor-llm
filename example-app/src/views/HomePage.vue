@@ -206,7 +206,7 @@ const isDownloading = ref(false);
 const selectedModel = ref('apple-intelligence');
 const showModelSelector = ref(false);
 let listenerRemove: (() => Promise<void>) | null = null;
-let readinessInterval: NodeJS.Timeout | null = null;
+let readinessInterval: ReturnType<typeof setInterval> | null = null;
 
 const messages = ref<Message[]>([
   {
@@ -883,4 +883,3 @@ ion-footer ion-toolbar {
   align-items: center;
 }
 </style>
-
