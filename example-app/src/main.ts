@@ -40,10 +40,11 @@ const app = createApp(App).use(IonicVue).use(router);
 
 router.isReady().then(() => {
   app.mount('#app');
+  if (Capacitor.isNativePlatform()) {
+    CapacitorUpdater.notifyAppReady().catch((error) => {
+      console.error('Capgo notifyAppReady failed', error);
+    });
+  }
+}).catch((error) => {
+  console.error('Vue bootstrap failed', error);
 });
-
-if (Capacitor.isNativePlatform()) {
-  CapacitorUpdater.notifyAppReady().catch((error) => {
-    console.error('Capgo notifyAppReady failed', error);
-  });
-}
