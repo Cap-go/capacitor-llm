@@ -55,8 +55,9 @@ function usableVersion(version) {
   return version && version !== '0.0.0' ? version : undefined;
 }
 
-const bundle =
-  process.env.CAPGO_BUNDLE || usableVersion(examplePackageJson.version) || usableVersion(rootPackageJson.version);
+const defaultBundle = usableVersion(examplePackageJson.version) || usableVersion(rootPackageJson.version);
+const localBundleVersion = defaultBundle ? `${defaultBundle}-${Date.now()}` : undefined;
+const bundle = process.env.CAPGO_BUNDLE || (process.env.GITHUB_ACTIONS ? defaultBundle : localBundleVersion);
 const comment =
   process.env.CAPGO_COMMENT ||
   (process.env.GITHUB_RUN_NUMBER
