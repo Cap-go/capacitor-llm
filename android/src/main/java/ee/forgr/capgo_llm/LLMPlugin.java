@@ -12,7 +12,7 @@ import java.util.List;
 @CapacitorPlugin(name = "CapgoLLM")
 public class LLMPlugin extends Plugin {
 
-    private final String pluginVersion = "8.0.18";
+    private final String pluginVersion = "8.0.19";
 
     private LLM llm;
 
