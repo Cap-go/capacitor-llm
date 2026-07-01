@@ -23,8 +23,9 @@ export interface LLMPlugin {
 
   /**
    * Sets the model configuration
-   * - iOS: Use "Apple Intelligence" as path for system model, provide a MediaPipe model, or set engine to "executorch"
-   * - Android: Path to a MediaPipe or ExecuTorch model file (in assets or files directory)
+   * - iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager.
+   * - Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
+   * - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
    */
@@ -59,6 +60,17 @@ export interface LLMPlugin {
   addListener(
     eventName: 'aiFinished',
     listenerFunc: (event: AiFinishedEvent) => void,
+  ): Promise<{ remove: () => Promise<void> }>;
+
+  /**
+   * Adds a listener for generation failures that happen after streaming starts
+   * @param eventName - Event name 'generationError'
+   * @param listenerFunc - Callback function for generation errors
+   * @returns Promise with remove function to unsubscribe
+   */
+  addListener(
+    eventName: 'generationError',
+    listenerFunc: (event: GenerationErrorEvent) => void,
   ): Promise<{ remove: () => Promise<void> }>;
 
   /**
@@ -119,12 +131,24 @@ export interface AiFinishedEvent {
 }
 
 /**
+ * Event data for generation failures
+ * `chatId` is optional and may be omitted when the failure is not tied to a specific chat.
+ */
+export interface GenerationErrorEvent {
+  /** Optional. The chat session ID that failed, when available. */
+  chatId?: string;
+  /** Error message describing the failure */
+  error: string;
+}
+
+/**
  * Options for downloading a model
+ * Only `url` is required. `companionUrl` and `filename` are optional.
  */
 export interface DownloadModelOptions {
   /** URL of the model file to download */
   url: string;
-  /** Optional: URL of companion file (e.g., .litertlm for Android) */
+  /** Optional: URL of a companion file for legacy model formats */
   companionUrl?: string;
   /** Optional: Custom filename (defaults to filename from URL) */
   filename?: string;
@@ -162,32 +186,19 @@ export interface ReadinessChangeEvent {
 
 /**
  * Model configuration options
+ * Only `path` is required. All other properties are optional overrides.
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for iOS system model */
+  /** Model path or "Apple Intelligence" for the Apple system model on iOS. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. */
   path: string;
-  /**
-   * Runtime engine to use.
-   * - "auto": uses Apple Intelligence on iOS when path is "Apple Intelligence", ExecuTorch for `.pte` or tokenizerPath, otherwise MediaPipe
-   * - "apple": iOS Foundation Models / Apple Intelligence
-   * - "mediapipe": MediaPipe GenAI `.task` models
-   * - "executorch": ExecuTorch `.pte` models with a tokenizer file
-   */
-  engine?: 'auto' | 'apple' | 'mediapipe' | 'executorch';
-  /** Model file type/extension (e.g., "task", "bin", "litertlm"). If not provided, will be extracted from path. */
+  /** Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations. */
   modelType?: string;
-  /** Tokenizer path for ExecuTorch models. Required when engine is "executorch". */
-  tokenizerPath?: string;
-  /** Optional special tokens passed to iOS ExecuTorch tokenizers. */
-  specialTokens?: string[];
   /** Maximum number of tokens the model handles */
   maxTokens?: number;
-  /** Sequence length for ExecuTorch generation. Defaults to maxTokens when omitted. */
-  sequenceLength?: number;
   /** Number of tokens the model considers at each step */
   topk?: number;
   /** Amount of randomness in generation (0.0-1.0) */
   temperature?: number;
-  /** Random seed for generation */
+  /** Optional. Random seed for generation. */
   randomSeed?: number;
 }
