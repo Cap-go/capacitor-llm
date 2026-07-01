@@ -61,6 +61,16 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
     #if canImport(FoundationModels)
     private var appleModel: Any? = {
+        // `SystemLanguageModel.default` is not functional for an iOS/iPadOS
+        // binary running "Designed for iPad" on Apple Silicon Mac, and
+        // touching it there crashes the app during plugin instantiation —
+        // before any of the app's own platform checks get a chance to run,
+        // since Capacitor eagerly instantiates every registered plugin at
+        // bridge startup. Skip it in that environment, same as the existing
+        // Mac Catalyst guard below.
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            return nil
+        }
         if #available(iOS 26.0, *) {
             return SystemLanguageModel.default
         } else {
