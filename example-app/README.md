@@ -2,35 +2,35 @@
 
 This example app shows the current recommended plugin flows:
 
-- iOS: Apple Intelligence by default, plus downloadable Gemma 4 LiteRT-LM models
+- iOS: Apple Intelligence by default in this CocoaPods-based host app, plus the legacy bundled MediaPipe `.task` path
 - Android: LiteRT-LM with Gemma 4 downloads
 - Web: Gemma 4 web models through `@mediapipe/tasks-genai`
 
 ## Setup
 
 ```bash
-bun install
-bunx cap sync
+npm install
+npx cap sync
 ```
 
 ## iOS
 
-The example defaults to Apple Intelligence.
+The bundled example defaults to Apple Intelligence.
 
 Requirements:
 
 - iOS 26.0+
 - Apple Intelligence enabled on the device
 
-Optional Gemma 4 custom-model path:
+Important limitation:
 
-- `Gemma 4 E2B (LiteRT-LM)`
-- `Gemma 4 E4B (LiteRT-LM)`
-- The app downloads the `.litertlm` bundles directly from `litert-community`.
+- This example app integrates the plugin through CocoaPods.
+- LiteRT-LM on iOS is supported only when the plugin is integrated through Swift Package Manager in the host app.
+- Because of that, the bundled example does not expose downloadable `.litertlm` models on iOS.
 
 Optional legacy custom-model path:
 
-- The plugin still supports bundled MediaPipe `.task` models on iOS.
+- The plugin still supports bundled MediaPipe `.task` models on iOS for CocoaPods hosts.
 - Add the file to the Xcode target's "Copy Bundle Resources".
 - Select `Gemma 2 2B (Legacy MediaPipe)` from the in-app model picker.
 
@@ -70,20 +70,19 @@ These load the web-specific `*-web.task` artifacts from the same `litert-communi
 ## Run
 
 ```bash
-bunx cap run ios
-bunx cap run android
+npx cap run ios
+npx cap run android
 ```
 
 Or open the native projects:
 
 ```bash
-bunx cap open ios
-bunx cap open android
+npx cap open ios
+npx cap open android
 ```
 
 ## Notes
 
 - Android now prefers `.litertlm` bundles through LiteRT-LM.
-- iOS custom-model sessions can also load downloaded `.litertlm` bundles.
-- Legacy Android `.task` models still work through the compatibility fallback in the plugin.
+- iOS LiteRT-LM requires a SwiftPM-integrated host app. This bundled example uses CocoaPods, so it demonstrates Apple Intelligence and the legacy MediaPipe `.task` path instead.
 - Web uses Gemma 4 `*-web.task` artifacts through `@mediapipe/tasks-genai`.

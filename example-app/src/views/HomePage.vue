@@ -251,31 +251,11 @@ interface Model {
 // Available models
 const models: { ios: Model[], android: Model[], web: Model[] } = {
   ios: [
-    { 
-      id: 'apple-intelligence', 
-      name: 'Apple Intelligence (Built-in)', 
+    {
+      id: 'apple-intelligence',
+      name: 'Apple Intelligence (Built-in)',
       needsDownload: false,
       note: 'System LLM - no download needed'
-    },
-    {
-      id: 'gemma4-e2b-ios-download',
-      name: 'Gemma 4 E2B (LiteRT-LM)',
-      needsDownload: true,
-      url: 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true',
-      filename: 'gemma-4-E2B-it.litertlm',
-      modelType: 'litertlm',
-      maxTokens: 4096,
-      note: 'Downloads the iOS/mobile Gemma 4 LiteRT-LM bundle.'
-    },
-    {
-      id: 'gemma4-e4b-ios-download',
-      name: 'Gemma 4 E4B (LiteRT-LM)',
-      needsDownload: true,
-      url: 'https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it.litertlm?download=true',
-      filename: 'gemma-4-E4B-it.litertlm',
-      modelType: 'litertlm',
-      maxTokens: 4096,
-      note: 'Larger iOS/mobile Gemma 4 variant for devices with more RAM.'
     },
     {
       id: 'gemma2-2b-legacy',
@@ -284,7 +264,7 @@ const models: { ios: Model[], android: Model[], web: Model[] } = {
       path: 'Gemma2-2B-IT_multi-prefill-seq_q8_ekv1280',
       modelType: 'task',
       maxTokens: 1280,
-      note: 'Manual bundle setup only. Kept as a legacy compatibility path.'
+      note: 'Manual bundle setup only. Kept as a legacy compatibility path while CocoaPods is used on iOS.'
     }
   ],
   android: [
@@ -664,7 +644,7 @@ onMounted(async () => {
         selectedModel.value = 'apple-intelligence';
         await CapgoLLM.setModel({ path: 'Apple Intelligence' });
         await initializeChat();
-        setConversationIntro('Apple Intelligence is ready. Open Model to switch to Gemma 4 LiteRT-LM.');
+        setConversationIntro('Apple Intelligence is ready. This example uses CocoaPods on iOS, so LiteRT-LM is available only in SwiftPM host apps.');
         console.log('iOS: Using Apple Intelligence (default)');
       } else if (platform === 'android') {
         selectedModel.value = 'gemma4-e2b-download';
@@ -684,7 +664,6 @@ onMounted(async () => {
     const aiFinishedListener = await CapgoLLM.addListener('aiFinished', handleAiFinished);
     const generationErrorListener = await CapgoLLM.addListener('generationError', handleGenerationError);
     const downloadProgressListener = await CapgoLLM.addListener('downloadProgress', (event) => {
-      downloadProgress.value = event.progress;
       console.log('Download progress:', event.progress);
     });
     listenerRemove = async () => {

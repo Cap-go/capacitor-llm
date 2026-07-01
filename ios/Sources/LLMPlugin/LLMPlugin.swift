@@ -3,8 +3,9 @@ import Capacitor
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
-// For CocoaPods, MediaPipeTasksGenAI should always be available
-// For SPM, we need conditional import when SPM support is added
+#if canImport(LiteRTLM)
+import LiteRTLM
+#endif
 #if canImport(MediaPipeTasksGenAI)
 import MediaPipeTasksGenAI
 #endif
@@ -17,6 +18,8 @@ import MediaPipeTasksGenAI
 @objc(LLMPlugin)
 public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private let pluginVersion: String = "8.0.9"
+    private let liteRtTopP: Float = 0.95
+
     public let identifier = "LLMPlugin"
     public let jsName = "CapgoLLM"
     public var pluginMethods: [CAPPluginMethod] = [
@@ -30,6 +33,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private enum ModelType {
         case appleIntelligence
+        case liteRtLm
         case mediaPipe
     }
 
@@ -49,6 +53,14 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     private var appleChats: [String: Any] = [:]
     #endif
 
+    #if canImport(LiteRTLM)
+    private var liteRtEngine: LiteRTLM.Engine?
+    private var liteRtChats: [String: LiteRTLM.Conversation] = [:]
+    private var liteRtTopk: Int = 40
+    private var liteRtTemperature: Float = 0.8
+    private var liteRtRandomSeed: Int = 0
+    #endif
+
     #if COCOAPODS || canImport(MediaPipeTasksGenAI)
     private var llmInference: LlmInference?
     private var mediaPipeChats: [String: LlmInference.Session] = [:]
@@ -63,25 +75,23 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        print("[CapgoLLM] Setting model path: \(path)")
-
-        // Extract model parameters
         let maxTokens = call.getInt("maxTokens") ?? 2048
         let topk = call.getInt("topk") ?? 40
         let temperature = call.getFloat("temperature") ?? 0.8
         let randomSeed = call.getInt("randomSeed") ?? 0
-        let modelType = call.getString("modelType") // Optional model type parameter
+        let modelType = call.getString("modelType")
 
         modelPath = path
         isReady = false
         clearChatSessions()
+        #if canImport(LiteRTLM)
+        liteRtEngine = nil
+        #endif
         #if COCOAPODS || canImport(MediaPipeTasksGenAI)
         llmInference = nil
         #endif
 
-        // Check if user wants to use Apple Intelligence
         if path.lowercased() == "apple intelligence" {
-            print("[CapgoLLM] Switching to Apple Intelligence")
             currentModelType = .appleIntelligence
             isReady = true
             notifyListeners("readinessChange", data: ["readiness": "ready"])
@@ -89,97 +99,80 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        #if canImport(MediaPipeTasksGenAI)
-        Task {
-            do {
-                let modelURL: URL
+        let resolvedModelType = resolveModelType(path: path, modelType: modelType)
+        switch resolveModelKind(path: path, modelType: modelType) {
+        case .appleIntelligence:
+            currentModelType = .appleIntelligence
+            isReady = true
+            notifyListeners("readinessChange", data: ["readiness": "ready"])
+            call.resolve()
 
-                // Check if it's a path within the app bundle
-                if path.hasPrefix("/") {
-                    modelURL = URL(fileURLWithPath: path)
-                    print("[CapgoLLM] Using absolute path: \(modelURL.path)")
-                } else {
-                    // Try to find it in the app bundle
-                    let fileName: String
-                    let fileExtension: String
-
-                    // If modelType is provided, use it as the extension
-                    if let providedType = modelType, !providedType.isEmpty {
-                        // Remove any extension from path and use provided type
-                        fileName = (path as NSString).deletingPathExtension
-                        fileExtension = providedType
-                        print("[CapgoLLM] Using provided model type: \(fileExtension)")
-                    } else {
-                        // Extract from path
-                        fileName = (path as NSString).deletingPathExtension
-                        fileExtension = (path as NSString).pathExtension
-                    }
-
-                    print("[CapgoLLM] Looking for model in bundle: \(fileName) with type: \(fileExtension.isEmpty ? "bin" : fileExtension)")
-
-                    // Use Bundle.main.path as shown in MediaPipe docs
-                    guard let bundlePath = Bundle.main.path(forResource: fileName, ofType: fileExtension.isEmpty ? "bin" : fileExtension) else {
-                        print("[CapgoLLM] Error: Model file not found in bundle: \(path)")
-                        print("[CapgoLLM] Tried resource: '\(fileName)' with type: '\(fileExtension.isEmpty ? "bin" : fileExtension)'")
-                        call.reject("Model file not found in bundle: \(path)")
-                        return
-                    }
-                    modelURL = URL(fileURLWithPath: bundlePath)
-                    print("[CapgoLLM] Found model in bundle at path: \(bundlePath)")
-
-                    // For MediaPipe models, verify companion .litertlm file exists
-                    if fileExtension == "task" {
-                        let companionPath = Bundle.main.path(forResource: fileName, ofType: "litertlm")
-                        if companionPath == nil {
-                            print("[CapgoLLM] Warning: Companion .litertlm file not found for \(fileName)")
-                            // Don't fail here as some models might not need it
-                        } else if let companionPath {
-                            print("[CapgoLLM] Found companion file at path: \(companionPath)")
-                        }
-                    }
+        case .liteRtLm:
+            #if canImport(LiteRTLM)
+            Task {
+                do {
+                    let modelURL = try resolveModelURL(path: path, modelType: modelType)
+                    let engine = try await initializeLiteRtEngine(modelURL: modelURL, maxTokens: maxTokens)
+                    liteRtEngine = engine
+                    liteRtTopk = topk
+                    liteRtTemperature = temperature
+                    liteRtRandomSeed = randomSeed
+                    currentModelType = .liteRtLm
+                    isReady = true
+                    notifyListeners("readinessChange", data: ["readiness": "ready"])
+                    call.resolve()
+                } catch {
+                    let message = "Failed to load model: \(error.localizedDescription)"
+                    notifyListeners("readinessChange", data: ["readiness": message])
+                    call.reject(message)
                 }
-
-                // Initialize MediaPipe LLM
-                print("[CapgoLLM] Initializing MediaPipe with model at: \(modelURL.path)")
-                let options = LlmInference.Options(modelPath: modelURL.path)
-                options.maxTokens = maxTokens
-                options.maxTopk = topk
-
-                print("[CapgoLLM] Creating LlmInference instance with maxTokens: \(maxTokens), topk: \(topk), temperature: \(temperature)")
-                llmInference = try LlmInference(options: options)
-                mediaPipeTopk = topk
-                mediaPipeTemperature = temperature
-                mediaPipeRandomSeed = randomSeed
-                currentModelType = .mediaPipe
-                isReady = true
-
-                print("[CapgoLLM] Model loaded successfully")
-                notifyListeners("readinessChange", data: ["readiness": "ready"])
-                call.resolve()
-            } catch {
-                print("[CapgoLLM] Error loading model: \(error.localizedDescription)")
-                notifyListeners("readinessChange", data: ["readiness": "Failed to load model: \(error.localizedDescription)"])
-                call.reject("Failed to load model: \(error.localizedDescription)")
             }
+            #else
+            let message = resolvedModelType == "litertlm"
+                ? "LiteRT-LM on iOS is available only when this plugin is integrated through Swift Package Manager."
+                : "This custom model format is unavailable on iOS in CocoaPods builds. Use Apple Intelligence or integrate the plugin through Swift Package Manager for LiteRT-LM support."
+            call.reject(message)
+            #endif
+
+        case .mediaPipe:
+            #if canImport(MediaPipeTasksGenAI)
+            Task {
+                do {
+                    let modelURL = try resolveModelURL(path: path, modelType: modelType)
+                    let options = LlmInference.Options(modelPath: modelURL.path)
+                    options.maxTokens = maxTokens
+                    options.maxTopk = topk
+
+                    llmInference = try LlmInference(options: options)
+                    mediaPipeTopk = topk
+                    mediaPipeTemperature = temperature
+                    mediaPipeRandomSeed = randomSeed
+                    currentModelType = .mediaPipe
+                    isReady = true
+                    notifyListeners("readinessChange", data: ["readiness": "ready"])
+                    call.resolve()
+                } catch {
+                    let message = "Failed to load model: \(error.localizedDescription)"
+                    notifyListeners("readinessChange", data: ["readiness": message])
+                    call.reject(message)
+                }
+            }
+            #else
+            call.reject("MediaPipe is not available. For iOS custom .litertlm models, integrate the plugin through Swift Package Manager to use LiteRT-LM.")
+            #endif
         }
-        #else
-        call.reject("MediaPipe is not available. Please install via CocoaPods.")
-        #endif
     }
 
     @objc func createChat(_ call: CAPPluginCall) {
-        print("[CapgoLLM] Creating chat with model type: \(currentModelType)")
         switch currentModelType {
         case .appleIntelligence:
             #if canImport(FoundationModels)
             if #available(iOS 26.0, *) {
                 let instructions = call.getString("instructions")
                 let session = LanguageModelSession(instructions: instructions)
-                let id = UUID()
-                appleChats[id.uuidString] = session
-                call.resolve([
-                    "id": id.uuidString
-                ])
+                let id = UUID().uuidString
+                appleChats[id] = session
+                call.resolve(["id": id])
             } else {
                 call.reject("Apple Intelligence requires iOS 26.0 or later")
             }
@@ -187,10 +180,31 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Apple Intelligence is not available on this device")
             #endif
 
+        case .liteRtLm:
+            #if canImport(LiteRTLM)
+            Task {
+                do {
+                    guard let engine = liteRtEngine else {
+                        call.reject("LiteRT-LM engine not loaded")
+                        return
+                    }
+
+                    let conversationConfig = try makeLiteRtConversationConfig(instructions: call.getString("instructions"))
+                    let conversation = try await engine.createConversation(with: conversationConfig)
+                    let id = UUID().uuidString
+                    liteRtChats[id] = conversation
+                    call.resolve(["id": id])
+                } catch {
+                    call.reject("Failed to create LiteRT-LM chat: \(error.localizedDescription)")
+                }
+            }
+            #else
+            call.reject("LiteRT-LM on iOS is available only when this plugin is integrated through Swift Package Manager.")
+            #endif
+
         case .mediaPipe:
             #if COCOAPODS || canImport(MediaPipeTasksGenAI)
             guard let inference = llmInference else {
-                print("[CapgoLLM] Error: Model not loaded when creating chat")
                 call.reject("Model not loaded")
                 return
             }
@@ -199,10 +213,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 let session = try LlmInference.Session(llmInference: inference, options: makeMediaPipeSessionOptions())
                 let id = UUID().uuidString
                 mediaPipeChats[id] = session
-                print("[CapgoLLM] Created MediaPipe chat with ID: \(id)")
-                call.resolve([
-                    "id": id
-                ])
+                call.resolve(["id": id])
             } catch {
                 call.reject("Failed to create chat: \(error.localizedDescription)")
             }
@@ -215,7 +226,6 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func getReadiness(_ call: CAPPluginCall) {
         let readiness = getReadinessStatus()
         call.resolve(["readiness": readiness])
-        // Also notify listeners
         notifyListeners("readinessChange", data: ["readiness": readiness])
     }
 
@@ -236,14 +246,13 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
                 case .unavailable(let other):
                     return "Error: \(other)"
                 }
-            } else {
-                return "Apple Intelligence requires iOS 26.0 or later"
             }
+            return "Apple Intelligence requires iOS 26.0 or later"
             #else
             return "Apple Intelligence is not available on this device"
             #endif
 
-        case .mediaPipe:
+        case .liteRtLm, .mediaPipe:
             return isReady ? "ready" : "not_ready"
         }
     }
@@ -278,6 +287,18 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("Apple Intelligence is not available on this device")
             #endif
 
+        case .liteRtLm:
+            #if canImport(LiteRTLM)
+            guard let conversation = liteRtChats[chatId] else {
+                call.reject("chat not found")
+                return
+            }
+
+            streamLiteRtResponse(chatId: chatId, message: message, conversation: conversation, call: call)
+            #else
+            call.reject("LiteRT-LM on iOS is available only when this plugin is integrated through Swift Package Manager.")
+            #endif
+
         case .mediaPipe:
             #if COCOAPODS || canImport(MediaPipeTasksGenAI)
             guard llmInference != nil else {
@@ -310,15 +331,12 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
 
         let filename = call.getString("filename") ?? url.lastPathComponent
 
-        // Get documents directory
         guard let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
             call.reject("Could not access documents directory")
             return
         }
 
         let destinationURL = documentsPath.appendingPathComponent(filename)
-
-        // Create download task
         let session = URLSession(configuration: .default, delegate: DownloadDelegate(plugin: self), delegateQueue: nil)
         let downloadTask = session.downloadTask(with: url) { tempURL, _, error in
             if let error = error {
@@ -332,38 +350,31 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             do {
-                // Remove existing file if it exists
                 if FileManager.default.fileExists(atPath: destinationURL.path) {
                     try FileManager.default.removeItem(at: destinationURL)
                 }
 
-                // Move downloaded file to documents directory
                 try FileManager.default.moveItem(at: tempURL, to: destinationURL)
 
                 var result = [
                     "path": destinationURL.path
                 ]
 
-                // Handle companion URL if provided (for compatibility)
                 if let companionUrlString = call.getString("companionUrl"),
                    let companionUrl = URL(string: companionUrlString) {
-
                     let companionFilename = companionUrl.lastPathComponent
                     let companionDestination = documentsPath.appendingPathComponent(companionFilename)
 
-                    // Download companion file synchronously for simplicity
                     do {
                         let companionData = try Data(contentsOf: companionUrl)
                         try companionData.write(to: companionDestination)
                         result["companionPath"] = companionDestination.path
                     } catch {
-                        // Log error but don't fail the whole download
                         print("Failed to download companion file: \(error)")
                     }
                 }
 
                 call.resolve(result)
-
             } catch {
                 call.reject("Failed to save file: \(error.localizedDescription)")
             }
@@ -380,9 +391,74 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         #if canImport(FoundationModels)
         appleChats.removeAll()
         #endif
+        #if canImport(LiteRTLM)
+        liteRtChats.removeAll()
+        #endif
         #if COCOAPODS || canImport(MediaPipeTasksGenAI)
         mediaPipeChats.removeAll()
         #endif
+    }
+
+    private func resolveModelKind(path: String, modelType: String?) -> ModelType {
+        let resolvedModelType = resolveModelType(path: path, modelType: modelType)
+        switch resolvedModelType {
+        case "litertlm":
+            return .liteRtLm
+        case "task":
+            return .mediaPipe
+        default:
+            #if canImport(LiteRTLM)
+            return .liteRtLm
+            #else
+            return .mediaPipe
+            #endif
+        }
+    }
+
+    private func resolveModelType(path: String, modelType: String?) -> String {
+        if let modelType, !modelType.isEmpty {
+            return stripURLSuffix(modelType).lowercased()
+        }
+
+        let normalizedPath = stripURLSuffix(path)
+        let pathExtension = (normalizedPath as NSString).pathExtension
+        return pathExtension.lowercased()
+    }
+
+    private func stripURLSuffix(_ value: String) -> String {
+        let queryIndex = value.firstIndex(of: "?")
+        let fragmentIndex = value.firstIndex(of: "#")
+        let cutoff = [queryIndex, fragmentIndex].compactMap { $0 }.min() ?? value.endIndex
+        return String(value[..<cutoff])
+    }
+
+    private func resolveModelURL(path: String, modelType: String?) throws -> URL {
+        if path.hasPrefix("/") {
+            return URL(fileURLWithPath: path)
+        }
+
+        let fileName: String
+        let fileExtension: String
+
+        if let modelType, !modelType.isEmpty {
+            fileName = (path as NSString).deletingPathExtension
+            fileExtension = stripURLSuffix(modelType)
+        } else {
+            let normalizedPath = stripURLSuffix(path)
+            fileName = (normalizedPath as NSString).deletingPathExtension
+            fileExtension = (normalizedPath as NSString).pathExtension
+        }
+
+        let fallbackExtension = fileExtension.isEmpty ? "bin" : fileExtension
+        guard let bundlePath = Bundle.main.path(forResource: fileName, ofType: fallbackExtension) else {
+            throw NSError(
+                domain: "CapgoLLM",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Model file not found in bundle: \(path)"]
+            )
+        }
+
+        return URL(fileURLWithPath: bundlePath)
     }
 }
 
@@ -437,19 +513,108 @@ private extension LLMPlugin {
 
         if let contentProperty = mirror.children.first(where: { $0.label == "content" }),
            let content = contentProperty.value as? String {
-            print("[CapgoLLM] Extracted content: \(content)")
             return content
         }
 
         if let rawContentProperty = mirror.children.first(where: { $0.label == "rawContent" }),
            let rawContent = rawContentProperty.value as? String {
-            print("[CapgoLLM] Extracted rawContent: \(rawContent)")
             return rawContent
         }
 
-        let fallback = "\(chunk)"
-        print("[CapgoLLM] Fallback to string conversion: \(fallback)")
-        return fallback
+        return "\(chunk)"
+    }
+}
+#endif
+
+#if canImport(LiteRTLM)
+private extension LLMPlugin {
+    func initializeLiteRtEngine(modelURL: URL, maxTokens: Int) async throws -> LiteRTLM.Engine {
+        guard let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
+            throw NSError(
+                domain: "CapgoLLM",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "Could not access the iOS caches directory for LiteRT-LM."]
+            )
+        }
+
+        let configs = [
+            try LiteRTLM.EngineConfig(
+                modelPath: modelURL.path,
+                backend: .gpu,
+                maxNumTokens: maxTokens,
+                cacheDir: cacheDirectory.path
+            ),
+            try LiteRTLM.EngineConfig(
+                modelPath: modelURL.path,
+                backend: .cpu(),
+                maxNumTokens: maxTokens,
+                cacheDir: cacheDirectory.path
+            )
+        ]
+
+        var lastError: Error?
+        for config in configs {
+            let engine = LiteRTLM.Engine(engineConfig: config)
+            do {
+                try await engine.initialize()
+                return engine
+            } catch {
+                lastError = error
+            }
+        }
+
+        throw lastError ?? NSError(
+            domain: "CapgoLLM",
+            code: 500,
+            userInfo: [NSLocalizedDescriptionKey: "Failed to initialize LiteRT-LM on iOS."]
+        )
+    }
+
+    func makeLiteRtConversationConfig(instructions: String?) throws -> LiteRTLM.ConversationConfig {
+        let sampler = try LiteRTLM.SamplerConfig(
+            topK: liteRtTopk,
+            topP: liteRtTopP,
+            temperature: liteRtTemperature,
+            seed: liteRtRandomSeed
+        )
+
+        let systemMessage: LiteRTLM.Message?
+        if let instructions, !instructions.isEmpty {
+            systemMessage = LiteRTLM.Message(instructions, role: .system)
+        } else {
+            systemMessage = nil
+        }
+
+        return LiteRTLM.ConversationConfig(
+            systemMessage: systemMessage,
+            samplerConfig: sampler
+        )
+    }
+
+    func streamLiteRtResponse(chatId: String, message: String, conversation: LiteRTLM.Conversation, call: CAPPluginCall) {
+        Task {
+            do {
+                for try await chunk in conversation.sendMessageStream(LiteRTLM.Message(message)) {
+                    let textChunk = chunk.toString
+                    if !textChunk.isEmpty {
+                        notifyListeners("textFromAi", data: [
+                            "chatId": chatId,
+                            "text": textChunk,
+                            "isChunk": true
+                        ])
+                    }
+                }
+
+                notifyListeners("aiFinished", data: ["chatId": chatId])
+                call.resolve()
+            } catch {
+                notifyListeners("generationError", data: [
+                    "chatId": chatId,
+                    "error": error.localizedDescription
+                ])
+                call.reject("Failed to generate response: \(error.localizedDescription)")
+            }
+        }
     }
 }
 #endif
@@ -467,12 +632,10 @@ private extension LLMPlugin {
     func streamMediaPipeResponse(chatId: String, message: String, session: LlmInference.Session, call: CAPPluginCall) {
         Task {
             do {
-                print("[CapgoLLM] Attempting to generate streaming response for message: \(message)")
                 try session.addQueryChunk(inputText: message)
                 let resultStream = session.generateResponseAsync()
 
                 for try await partialResult in resultStream {
-                    print("[CapgoLLM] Partial result: \(partialResult)")
                     notifyListeners("textFromAi", data: [
                         "chatId": chatId,
                         "text": partialResult,
@@ -483,7 +646,6 @@ private extension LLMPlugin {
                 notifyListeners("aiFinished", data: ["chatId": chatId])
                 call.resolve()
             } catch {
-                print("[CapgoLLM] Error details: \(error)")
                 notifyListeners("generationError", data: [
                     "chatId": chatId,
                     "error": error.localizedDescription
@@ -495,7 +657,6 @@ private extension LLMPlugin {
 }
 #endif
 
-// Download delegate class to handle progress updates
 class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     weak var plugin: CAPPlugin?
 
@@ -506,7 +667,6 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didWriteData bytesWritten: Int64, totalBytesWritten: Int64,
                     totalBytesExpectedToWrite: Int64) {
-
         if totalBytesExpectedToWrite > 0 {
             let progress = Int((Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)) * 100)
 
@@ -520,7 +680,6 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask,
                     didFinishDownloadingTo location: URL) {
-        // Handled in the completion handler
+        // Handled in the completion handler.
     }
-
 }
