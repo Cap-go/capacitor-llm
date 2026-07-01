@@ -1,6 +1,6 @@
 {
   "name": "@capgo/capacitor-llm",
-  "version": "8.0.19",
+  "version": "8.0.9",
   "description": "Adds support for LLM locally runned for Capacitor",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
@@ -32,9 +32,12 @@
     "llm",
     "local",
     "gemma",
+    "gemma4",
     "gemma3",
     "gemma3-270m",
     "gemma2-2b",
+    "litert",
+    "litert-lm",
     "apple-intelligence",
     "gpt"
   ],
@@ -53,9 +56,7 @@
     "clean": "rimraf ./dist",
     "watch": "tsc --watch",
     "prepublishOnly": "bun run build",
-    "check:wiring": "node scripts/check-capacitor-plugin-wiring.mjs",
-    "example:install": "cd example-app && bun install --frozen-lockfile",
-    "example:build": "bun run build && cd example-app && bun install --frozen-lockfile && bun run build"
+    "check:wiring": "node scripts/check-capacitor-plugin-wiring.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",
@@ -80,7 +81,7 @@
   },
   "peerDependencies": {
     "@capacitor/core": ">=8.0.0",
-    "@mediapipe/tasks-genai": "^0.10.27"
+    "@mediapipe/tasks-genai": "^0.10.24"
   },
   "prettier": "@ionic/prettier-config",
   "swiftlint": "@ionic/swiftlint-config",

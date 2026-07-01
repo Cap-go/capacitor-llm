@@ -1,40 +1,57 @@
 package ee.forgr.capgo_llm;
 
 import android.content.Context;
+import com.google.ai.edge.litertlm.Backend;
+import com.google.ai.edge.litertlm.Content;
+import com.google.ai.edge.litertlm.Conversation;
+import com.google.ai.edge.litertlm.ConversationConfig;
+import com.google.ai.edge.litertlm.Engine;
+import com.google.ai.edge.litertlm.EngineConfig;
+import com.google.ai.edge.litertlm.Message;
+import com.google.ai.edge.litertlm.SamplerConfig;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.pytorch.executorch.extension.llm.LlmCallback;
-import org.pytorch.executorch.extension.llm.LlmModule;
 
 public class LLM {
 
-    private enum Engine {
-        MEDIAPIPE,
-        EXECUTORCH
+    private enum BackendType {
+        LITERT,
+        MEDIAPIPE
     }
 
+    private static final double DEFAULT_TOP_P = 0.95d;
     private static LLM instance;
-    private LlmInference mediaPipeInference;
-    private LlmModule executorchModule;
-    private Map<String, ChatSession> chatSessions;
+
+    private final Context context;
+    private final Executor executor;
+    private final Map<String, ChatSession> chatSessions;
+
+    private Engine engine;
+    private LlmInference llmInference;
     private boolean isReady = false;
-    private Context context;
-    private Executor executor;
     private String modelPath = null;
-    private String tokenizerPath = null;
-    private Engine currentEngine = Engine.MEDIAPIPE;
+    private String modelType = null;
+    private BackendType activeBackend = BackendType.LITERT;
+    private long currentLoadId = 0L;
+
+    private Integer maxTokens = 2048;
+    private Integer topk = 40;
+    private Float temperature = 0.1f;
+    private Integer randomSeed = 101;
 
     private LLM(Context context) {
         this.context = context;
-        this.chatSessions = new HashMap<>();
+        this.chatSessions = new ConcurrentHashMap<>();
         this.executor = Executors.newSingleThreadExecutor();
     }
 
@@ -45,109 +62,52 @@ public class LLM {
         return instance;
     }
 
-    // Model parameters
-    private Integer maxTokens = 2048;
-    private Integer sequenceLength = 2048;
-    private Integer topk = 40;
-    private Float temperature = 0.1f;
-    private String modelType = null;
-
     public void setModel(
         String path,
-        String engine,
         String modelType,
-        String tokenizerPath,
-        List<String> specialTokens,
         Integer maxTokens,
-        Integer sequenceLength,
         Integer topk,
         Float temperature,
+        Integer randomSeed,
         ModelLoadCallback callback
     ) {
-        this.modelPath = path;
-        this.tokenizerPath = tokenizerPath;
-        this.modelType = modelType;
-        this.maxTokens = maxTokens;
-        this.sequenceLength = sequenceLength != null ? sequenceLength : maxTokens;
-        this.topk = topk;
-        this.temperature = temperature;
-        try {
-            this.currentEngine = resolveEngine(engine, path, tokenizerPath);
-        } catch (IllegalArgumentException e) {
-            isReady = false;
-            if (callback != null) {
-                callback.onError(e.getMessage());
-            }
-            return;
-        }
-        isReady = false;
+        ModelLoadRequest request = nextLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed);
+        resetModelState();
 
         android.util.Log.d(
             "LLM",
-            "setModel called with engine: " +
-                currentEngine +
-                ", path: " +
-                path +
-                ", tokenizerPath: " +
-                tokenizerPath +
+            "setModel called with path: " +
+                request.modelPath +
+                ", modelType: " +
+                request.modelType +
                 ", maxTokens: " +
-                maxTokens +
-                ", sequenceLength: " +
-                this.sequenceLength +
+                request.maxTokens +
                 ", topk: " +
-                topk +
+                request.topk +
                 ", temperature: " +
-                temperature +
-                ", specialTokens: " +
-                (specialTokens == null ? 0 : specialTokens.size())
+                request.temperature
         );
-        initializeModel(callback);
+        initializeModel(request, callback);
     }
 
-    private Engine resolveEngine(String engine, String path, String tokenizerPath) {
-        String normalizedEngine = engine == null ? "auto" : engine.toLowerCase(Locale.US);
-        if ("executorch".equals(normalizedEngine)) {
-            return Engine.EXECUTORCH;
-        }
-        if ("mediapipe".equals(normalizedEngine)) {
-            return Engine.MEDIAPIPE;
-        }
-        if ("apple".equals(normalizedEngine)) {
-            throw new IllegalArgumentException("Apple Intelligence is only available on iOS");
-        }
-        if (tokenizerPath != null && !tokenizerPath.isEmpty()) {
-            return Engine.EXECUTORCH;
-        }
-        if (path != null && path.toLowerCase(Locale.US).endsWith(".pte")) {
-            return Engine.EXECUTORCH;
-        }
-        return Engine.MEDIAPIPE;
+    private synchronized ModelLoadRequest nextLoadRequest(
+        String path,
+        String modelType,
+        Integer maxTokens,
+        Integer topk,
+        Float temperature,
+        Integer randomSeed
+    ) {
+        currentLoadId += 1;
+        return new ModelLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, currentLoadId);
     }
 
-    private void releaseCurrentModel() {
-        if (mediaPipeInference != null) {
-            try {
-                mediaPipeInference.close();
-            } catch (Exception e) {
-                android.util.Log.w("LLM", "Failed to close MediaPipe inference: " + e.getMessage());
-            } finally {
-                mediaPipeInference = null;
-            }
-        }
-
-        if (executorchModule != null) {
-            try {
-                executorchModule.stop();
-            } catch (Exception e) {
-                android.util.Log.w("LLM", "Failed to stop ExecuTorch module: " + e.getMessage());
-            } finally {
-                executorchModule = null;
-            }
-        }
+    private synchronized boolean isCurrentLoad(long loadId) {
+        return loadId == currentLoadId;
     }
 
-    private void initializeModel(ModelLoadCallback callback) {
-        if (modelPath == null) {
+    private void initializeModel(ModelLoadRequest request, ModelLoadCallback callback) {
+        if (request.modelPath == null) {
             if (callback != null) {
                 callback.onError("Model path not set");
             }
@@ -156,277 +116,335 @@ public class LLM {
 
         executor.execute(() -> {
             try {
-                releaseCurrentModel();
-                if (currentEngine == Engine.EXECUTORCH) {
-                    initializeExecutorchModel();
-                } else {
-                    initializeMediaPipeModel();
+                if (!isCurrentLoad(request.loadId)) {
+                    notifySupersededLoad(callback);
+                    return;
                 }
-                isReady = true;
+
+                BackendType backend = resolveBackend(request.modelPath, request.modelType);
+                String actualPath = resolveModelPath(request.modelPath, backend);
+
+                android.util.Log.d("LLM", "Resolved model path: " + actualPath + " using backend: " + backend);
+
+                if (backend == BackendType.LITERT) {
+                    Engine loadedEngine = initializeLiteRtModel(actualPath, request);
+                    if (!isCurrentLoad(request.loadId)) {
+                        closeEngine(loadedEngine);
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+                    applyLoadedModel(request, backend, loadedEngine, null);
+                } else {
+                    LlmInference loadedInference = initializeMediaPipeModel(actualPath, request);
+                    if (!isCurrentLoad(request.loadId)) {
+                        closeLlmInference(loadedInference);
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+                    applyLoadedModel(request, backend, null, loadedInference);
+                }
 
                 if (callback != null) {
                     callback.onSuccess();
                 }
-            } catch (Exception e) {
-                isReady = false;
-                e.printStackTrace();
+            } catch (Exception exception) {
+                if (!isCurrentLoad(request.loadId)) {
+                    notifySupersededLoad(callback);
+                    return;
+                }
+
+                android.util.Log.e("LLM", "Failed to initialize model", exception);
+                resetModelState();
+
                 if (callback != null) {
-                    callback.onError(e.getMessage());
+                    callback.onError(exception.getMessage());
                 }
             }
         });
     }
 
-    private void initializeMediaPipeModel() throws Exception {
-        String actualPath = resolveModelPath(modelPath, true);
-        android.util.Log.d("LLM", "Final MediaPipe model path: " + actualPath);
+    private void notifySupersededLoad(ModelLoadCallback callback) {
+        if (callback != null) {
+            callback.onError("Model load was superseded by a newer request");
+        }
+    }
 
-        LlmInferenceOptions.Builder optionsBuilder = LlmInferenceOptions.builder()
+    private synchronized void applyLoadedModel(
+        ModelLoadRequest request,
+        BackendType backend,
+        Engine loadedEngine,
+        LlmInference loadedInference
+    ) {
+        modelPath = request.modelPath;
+        modelType = request.modelType;
+        maxTokens = request.maxTokens;
+        topk = request.topk;
+        temperature = request.temperature;
+        randomSeed = request.randomSeed;
+        activeBackend = backend;
+        engine = loadedEngine;
+        llmInference = loadedInference;
+        isReady = true;
+    }
+
+    private Engine initializeLiteRtModel(String actualPath, ModelLoadRequest request) {
+        EngineConfig config = new EngineConfig(
+            actualPath,
+            new Backend.CPU(),
+            new Backend.CPU(),
+            new Backend.CPU(),
+            request.maxTokens,
+            context.getCacheDir().getAbsolutePath()
+        );
+        Engine loadedEngine = new Engine(config);
+        loadedEngine.initialize();
+        return loadedEngine;
+    }
+
+    private LlmInference initializeMediaPipeModel(String actualPath, ModelLoadRequest request) {
+        LlmInferenceOptions options = LlmInferenceOptions.builder()
             .setModelPath(actualPath)
-            .setMaxTokens(maxTokens)
-            .setMaxTopK(topk);
-
-        LlmInferenceOptions options = optionsBuilder.build();
-        mediaPipeInference = LlmInference.createFromOptions(context, options);
+            .setMaxTokens(request.maxTokens)
+            .setMaxTopK(request.topk)
+            .build();
+        return LlmInference.createFromOptions(context, options);
     }
 
-    private void initializeExecutorchModel() throws Exception {
-        if (tokenizerPath == null || tokenizerPath.isEmpty()) {
-            throw new RuntimeException("tokenizerPath is required for ExecuTorch models");
-        }
-
-        String actualModelPath = resolveModelPath(modelPath, false);
-        String actualTokenizerPath = resolveModelPath(tokenizerPath, false);
-        int executorModelType = resolveExecutorchModelType(modelType);
-
-        android.util.Log.d("LLM", "Final ExecuTorch model path: " + actualModelPath);
-        android.util.Log.d("LLM", "Final ExecuTorch tokenizer path: " + actualTokenizerPath);
-
-        executorchModule = new LlmModule(executorModelType, actualModelPath, actualTokenizerPath, temperature);
-        executorchModule.load();
+    private BackendType resolveBackend(String path, String modelType) {
+        return "litertlm".equals(normalizeModelType(path, modelType)) ? BackendType.LITERT : BackendType.MEDIAPIPE;
     }
 
-    private int resolveExecutorchModelType(String modelType) {
-        if (modelType == null) {
-            return LlmModule.MODEL_TYPE_TEXT;
+    private String normalizeModelType(String path, String modelType) {
+        if (modelType != null && !modelType.isBlank()) {
+            return stripUrlSuffix(modelType).toLowerCase();
         }
-        String normalized = modelType.toLowerCase(Locale.US);
-        if ("text-vision".equals(normalized) || "vision".equals(normalized)) {
-            return LlmModule.MODEL_TYPE_TEXT_VISION;
+
+        String normalizedPath = stripUrlSuffix(path);
+        int extensionIndex = normalizedPath.lastIndexOf('.');
+        if (extensionIndex == -1 || extensionIndex == normalizedPath.length() - 1) {
+            return "";
         }
-        if ("multimodal".equals(normalized)) {
-            return LlmModule.MODEL_TYPE_MULTIMODAL;
-        }
-        return LlmModule.MODEL_TYPE_TEXT;
+
+        return normalizedPath.substring(extensionIndex + 1).toLowerCase();
     }
 
-    private String resolveModelPath(String path, boolean copyMediaPipeCompanion) throws Exception {
-        android.util.Log.d("LLM", "Original model path: " + path);
+    private String stripUrlSuffix(String value) {
+        int cutoff = value.length();
+        int queryIndex = value.indexOf('?');
+        int fragmentIndex = value.indexOf('#');
 
+        if (queryIndex >= 0 && queryIndex < cutoff) {
+            cutoff = queryIndex;
+        }
+        if (fragmentIndex >= 0 && fragmentIndex < cutoff) {
+            cutoff = fragmentIndex;
+        }
+
+        return value.substring(0, cutoff);
+    }
+
+    private String resolveModelPath(String path, BackendType backendType) throws Exception {
         if (!path.startsWith("/android_asset/")) {
             return path;
         }
 
         String assetPath = path.substring("/android_asset/".length());
-        android.util.Log.d("LLM", "Asset path: " + assetPath);
-
-        try (java.io.InputStream is = context.getAssets().open(assetPath)) {
-            android.util.Log.d("LLM", "Asset exists: " + assetPath);
-        } catch (Exception e) {
-            android.util.Log.e("LLM", "Asset not found: " + assetPath, e);
-            throw new RuntimeException("Asset not found: " + assetPath);
-        }
-
-        java.io.File cacheDir = context.getCacheDir();
-        java.io.File modelFile = new java.io.File(cacheDir, assetPath);
-        java.io.File parent = modelFile.getParentFile();
-        if (parent != null) {
-            parent.mkdirs();
-        }
+        File cacheDir = context.getCacheDir();
+        File modelFile = new File(cacheDir, assetPath);
 
         copyAssetToFile(assetPath, modelFile);
-        android.util.Log.d("LLM", "Copied asset to: " + modelFile.getAbsolutePath());
 
-        if (copyMediaPipeCompanion && assetPath.endsWith(".task")) {
-            copyOptionalCompanion(assetPath, cacheDir);
+        if (backendType == BackendType.MEDIAPIPE && assetPath.endsWith(".task")) {
+            String companionPath = assetPath.replace(".task", ".litertlm");
+            try {
+                copyAssetToFile(companionPath, new File(cacheDir, companionPath));
+            } catch (Exception exception) {
+                android.util.Log.d("LLM", "No MediaPipe companion file found for " + assetPath);
+            }
         }
 
         return modelFile.getAbsolutePath();
     }
 
-    private void copyOptionalCompanion(String assetPath, java.io.File cacheDir) {
-        String litertlmPath = assetPath.replace(".task", ".litertlm");
-        try (java.io.InputStream litertlmIs = context.getAssets().open(litertlmPath)) {
-            java.io.File litertlmFile = new java.io.File(cacheDir, litertlmPath);
-            java.io.File parent = litertlmFile.getParentFile();
-            if (parent != null) {
-                parent.mkdirs();
-            }
-            copyAssetToFile(litertlmPath, litertlmFile);
-            android.util.Log.d("LLM", "Also copied companion file: " + litertlmFile.getAbsolutePath());
-        } catch (Exception e) {
-            android.util.Log.d("LLM", "No companion .litertlm file found");
+    private void copyAssetToFile(String assetPath, File destination) throws Exception {
+        File parent = destination.getParentFile();
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs();
         }
-    }
 
-    private void copyAssetToFile(String assetPath, java.io.File destFile) throws Exception {
         try (
-            java.io.InputStream is = context.getAssets().open(assetPath);
-            java.io.FileOutputStream fos = new java.io.FileOutputStream(destFile)
+            InputStream inputStream = context.getAssets().open(assetPath);
+            FileOutputStream outputStream = new FileOutputStream(destination)
         ) {
-            byte[] buffer = new byte[4096];
+            byte[] buffer = new byte[8192];
             int length;
-            while ((length = is.read(buffer)) > 0) {
-                fos.write(buffer, 0, length);
+            while ((length = inputStream.read(buffer)) > 0) {
+                outputStream.write(buffer, 0, length);
             }
         }
     }
 
-    public String createChat() {
+    public synchronized String createChat() {
+        if (!isReady) {
+            throw new IllegalStateException("Model not ready");
+        }
+
         String chatId = UUID.randomUUID().toString();
-        ChatSession session = new ChatSession();
+        ChatSession session;
+
+        if (activeBackend == BackendType.LITERT) {
+            if (engine == null) {
+                throw new IllegalStateException("LiteRT-LM engine not initialized");
+            }
+            session = ChatSession.forLiteRt(createLiteRtConversation());
+        } else {
+            if (llmInference == null) {
+                throw new IllegalStateException("MediaPipe model not initialized");
+            }
+            session = ChatSession.forMediaPipe();
+        }
+
         chatSessions.put(chatId, session);
         return chatId;
     }
 
+    private Conversation createLiteRtConversation() {
+        ConversationConfig defaults = new ConversationConfig();
+        SamplerConfig samplerConfig = new SamplerConfig(topk, DEFAULT_TOP_P, temperature.doubleValue(), randomSeed);
+        ConversationConfig config = defaults.copy(
+            defaults.getSystemInstruction(),
+            defaults.getInitialMessages(),
+            defaults.getTools(),
+            samplerConfig,
+            defaults.getAutomaticToolCalling(),
+            defaults.getChannels()
+        );
+        return engine.createConversation(config);
+    }
+
     public void sendMessage(String chatId, String message, MessageCallback callback) {
-        ChatSession session = chatSessions.get(chatId);
-        if (session == null) {
-            callback.onError("Chat session not found");
-            return;
-        }
+        ChatSession session;
+        LlmInference inference;
+        Integer sessionTopk;
+        Float sessionTemperature;
 
-        if (!isReady) {
-            callback.onError("Model not ready");
-            return;
-        }
-
-        if (currentEngine == Engine.EXECUTORCH) {
-            sendExecutorchMessage(chatId, message, session, callback);
-        } else {
-            sendMediaPipeMessage(chatId, message, session, callback);
-        }
-    }
-
-    private void sendExecutorchMessage(String chatId, String message, ChatSession session, MessageCallback callback) {
-        final LlmModule module = executorchModule;
-        final int generationSequenceLength = sequenceLength;
-        final float generationTemperature = temperature;
-
-        if (module == null) {
-            callback.onError("ExecuTorch model not ready");
-            return;
-        }
-
-        executor.execute(() -> {
-            try {
-                session.addMessage("user", message);
-                String fullPrompt = session.buildPrompt(message);
-                AtomicBoolean completed = new AtomicBoolean(false);
-                StringBuilder fullResponse = new StringBuilder();
-
-                module.resetContext();
-                int errorCode = module.generate(
-                    fullPrompt,
-                    generationSequenceLength,
-                    new LlmCallback() {
-                        @Override
-                        public void onResult(String result) {
-                            if (result == null || result.isEmpty()) {
-                                return;
-                            }
-                            callback.onTextReceived(chatId, result, true);
-                            fullResponse.append(result);
-                        }
-
-                        @Override
-                        public void onStats(String stats) {
-                            if (completed.compareAndSet(false, true)) {
-                                session.addMessage("assistant", fullResponse.toString());
-                                callback.onComplete(chatId);
-                            }
-                        }
-                    },
-                    false,
-                    generationTemperature,
-                    0,
-                    0
-                );
-
-                if (errorCode != 0) {
-                    completed.set(true);
-                    callback.onError("ExecuTorch error " + errorCode);
-                } else if (completed.compareAndSet(false, true)) {
-                    session.addMessage("assistant", fullResponse.toString());
-                    callback.onComplete(chatId);
-                }
-            } catch (Exception e) {
-                callback.onError(e.getMessage());
+        synchronized (this) {
+            session = chatSessions.get(chatId);
+            if (session == null) {
+                throw new IllegalStateException("Chat session not found");
             }
-        });
-    }
 
-    private void sendMediaPipeMessage(String chatId, String message, ChatSession session, MessageCallback callback) {
-        final LlmInference inference = mediaPipeInference;
-        final int sessionTopk = topk;
-        final float sessionTemperature = temperature;
+            if (!isReady) {
+                throw new IllegalStateException("Model not ready");
+            }
+
+            inference = llmInference;
+            sessionTopk = topk;
+            sessionTemperature = temperature;
+        }
+
+        if (session.backendType == BackendType.LITERT) {
+            sendMessageWithLiteRt(chatId, message, session, callback);
+            return;
+        }
 
         if (inference == null) {
-            callback.onError("MediaPipe model not ready");
-            return;
+            throw new IllegalStateException("MediaPipe model not ready");
         }
 
+        sendMessageWithMediaPipe(chatId, message, session, inference, sessionTopk, sessionTemperature, callback);
+    }
+
+    private void sendMessageWithLiteRt(String chatId, String message, ChatSession session, MessageCallback callback) {
+        if (session.conversation == null) {
+            throw new IllegalStateException("LiteRT-LM conversation not found");
+        }
+
+        session.conversation.sendMessageAsync(
+            message,
+            new com.google.ai.edge.litertlm.MessageCallback() {
+                @Override
+                public void onMessage(Message responseMessage) {
+                    String chunk = extractText(responseMessage);
+                    if (!chunk.isEmpty()) {
+                        callback.onTextReceived(chatId, chunk, true);
+                    }
+                }
+
+                @Override
+                public void onDone() {
+                    callback.onComplete(chatId);
+                }
+
+                @Override
+                public void onError(Throwable throwable) {
+                    callback.onError(throwable.getMessage());
+                }
+            },
+            Collections.emptyMap()
+        );
+    }
+
+    private String extractText(Message responseMessage) {
+        StringBuilder builder = new StringBuilder();
+
+        for (Content content : responseMessage.getContents().getContents()) {
+            if (content instanceof Content.Text) {
+                builder.append(((Content.Text) content).getText());
+            }
+        }
+
+        return builder.toString();
+    }
+
+    private void sendMessageWithMediaPipe(
+        String chatId,
+        String message,
+        ChatSession session,
+        LlmInference inference,
+        Integer sessionTopk,
+        Float sessionTemperature,
+        MessageCallback callback
+    ) {
         executor.execute(() -> {
+            LlmInferenceSession inferenceSession = null;
             try {
-                // Add user message to history
                 session.addMessage("user", message);
 
-                // Build the full prompt with chat history
-                String fullPrompt = session.buildPrompt(message);
+                String fullPrompt = session.buildPrompt();
                 android.util.Log.d("LLM", "Full prompt: " + fullPrompt);
 
-                // Create a session with proper options
-                com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions sessionOptions =
-                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
-                        .setTopK(sessionTopk)
-                        .setTemperature(sessionTemperature)
-                        .build();
+                LlmInferenceSession.LlmInferenceSessionOptions sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
+                    .setTopK(sessionTopk)
+                    .setTemperature(sessionTemperature)
+                    .build();
 
-                com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession inferenceSession =
-                    com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.createFromOptions(inference, sessionOptions);
+                inferenceSession = LlmInferenceSession.createFromOptions(inference, sessionOptions);
+                LlmInferenceSession activeSession = inferenceSession;
 
-                // Add the query
                 inferenceSession.addQueryChunk(fullPrompt);
 
-                // Use streaming API
                 final StringBuilder fullResponse = new StringBuilder();
 
                 com.google.mediapipe.tasks.genai.llminference.ProgressListener<String> resultListener =
                     new com.google.mediapipe.tasks.genai.llminference.ProgressListener<String>() {
                         private StringBuilder buffer = new StringBuilder();
                         private boolean hasStarted = false;
-                        private final AtomicBoolean completed = new AtomicBoolean(false);
 
                         @Override
                         public void run(String partialResult, boolean done) {
                             android.util.Log.d("LLM", "Partial result: " + partialResult + ", done: " + done);
 
-                            // Accumulate in buffer
                             buffer.append(partialResult);
 
-                            // Process buffer when we have enough content or when done
                             String content = buffer.toString();
-
-                            // Check if we can process some content
                             StringBuilder toSend = new StringBuilder();
                             int i = 0;
                             while (i < content.length()) {
-                                // Check for escape sequence
                                 if (i < content.length() - 1 && content.charAt(i) == '\\' && content.charAt(i + 1) == 'n') {
                                     toSend.append('\n');
                                     i += 2;
                                 } else if (i == content.length() - 1 && content.charAt(i) == '\\' && !done) {
-                                    // We have a backslash at the end and more chunks coming - wait for next chunk
                                     break;
                                 } else {
                                     toSend.append(content.charAt(i));
@@ -434,14 +452,11 @@ public class LLM {
                                 }
                             }
 
-                            // Update buffer to contain only unprocessed content
                             buffer = new StringBuilder(content.substring(i));
 
-                            // Send processed content if any
                             String chunk = toSend.toString();
 
-                            // Remove leading newline from the very first content
-                            if (!hasStarted && chunk.length() > 0) {
+                            if (!hasStarted && !chunk.isEmpty()) {
                                 chunk = chunk.replaceFirst("^\\n", "");
                                 hasStarted = true;
                             }
@@ -451,35 +466,88 @@ public class LLM {
                                 fullResponse.append(chunk);
                             }
 
-                            if (done && completed.compareAndSet(false, true)) {
-                                if (buffer.length() > 0) {
-                                    String remaining = buffer.toString();
+                            if (done && buffer.length() > 0) {
+                                String remaining = buffer.toString();
+                                if (!remaining.isEmpty()) {
                                     callback.onTextReceived(chatId, remaining, true);
                                     fullResponse.append(remaining);
-                                    buffer = new StringBuilder();
                                 }
+                            }
 
+                            if (done) {
                                 session.addMessage("assistant", fullResponse.toString());
                                 callback.onComplete(chatId);
-
-                                try {
-                                    inferenceSession.close();
-                                } catch (Exception e) {
-                                    android.util.Log.e("LLM", "Failed to close session: " + e.getMessage());
-                                }
+                                closeMediaPipeSession(activeSession);
                             }
                         }
                     };
 
                 inferenceSession.generateResponseAsync(resultListener);
-            } catch (Exception e) {
-                callback.onError(e.getMessage());
+            } catch (Exception exception) {
+                closeMediaPipeSession(inferenceSession);
+                callback.onError(exception.getMessage());
             }
         });
     }
 
-    public String getReadiness() {
+    public synchronized String getReadiness() {
         return isReady ? "ready" : "not_ready";
+    }
+
+    private synchronized void resetModelState() {
+        clearChatSessions();
+
+        closeEngine(engine);
+        closeLlmInference(llmInference);
+        engine = null;
+        llmInference = null;
+        modelPath = null;
+        modelType = null;
+        isReady = false;
+    }
+
+    private void closeEngine(Engine loadedEngine) {
+        if (loadedEngine != null) {
+            try {
+                loadedEngine.close();
+            } catch (Exception exception) {
+                android.util.Log.w("LLM", "Failed to close LiteRT-LM engine", exception);
+            }
+        }
+    }
+
+    private void closeMediaPipeSession(LlmInferenceSession inferenceSession) {
+        if (inferenceSession != null) {
+            try {
+                inferenceSession.close();
+            } catch (Exception exception) {
+                android.util.Log.e("LLM", "Failed to close MediaPipe session", exception);
+            }
+        }
+    }
+
+    private void closeLlmInference(LlmInference inference) {
+        if (inference != null) {
+            try {
+                inference.close();
+            } catch (Exception exception) {
+                android.util.Log.w("LLM", "Failed to close MediaPipe model", exception);
+            }
+        }
+    }
+
+    private void clearChatSessions() {
+        for (ChatSession session : chatSessions.values()) {
+            if (session.conversation != null) {
+                try {
+                    session.conversation.close();
+                } catch (Exception exception) {
+                    android.util.Log.w("LLM", "Failed to close LiteRT-LM conversation", exception);
+                }
+            }
+        }
+
+        chatSessions.clear();
     }
 
     public interface MessageCallback {
@@ -493,17 +561,27 @@ public class LLM {
         void onError(String error);
     }
 
-    // Inner class to manage chat sessions
     private static class ChatSession {
 
-        private StringBuilder history;
+        private final BackendType backendType;
+        private final Conversation conversation;
+        private final StringBuilder history;
 
-        ChatSession() {
+        private ChatSession(BackendType backendType, Conversation conversation) {
+            this.backendType = backendType;
+            this.conversation = conversation;
             this.history = new StringBuilder();
         }
 
+        static ChatSession forLiteRt(Conversation conversation) {
+            return new ChatSession(BackendType.LITERT, conversation);
+        }
+
+        static ChatSession forMediaPipe() {
+            return new ChatSession(BackendType.MEDIAPIPE, null);
+        }
+
         void addMessage(String role, String content) {
-            // Store messages in a cleaner format for history
             if (history.length() > 0) {
                 history.append("\n");
             }
@@ -514,8 +592,37 @@ public class LLM {
             }
         }
 
-        String buildPrompt(String newMessage) {
+        String buildPrompt() {
             return history.toString();
+        }
+    }
+
+    private static class ModelLoadRequest {
+
+        private final String modelPath;
+        private final String modelType;
+        private final Integer maxTokens;
+        private final Integer topk;
+        private final Float temperature;
+        private final Integer randomSeed;
+        private final long loadId;
+
+        private ModelLoadRequest(
+            String modelPath,
+            String modelType,
+            Integer maxTokens,
+            Integer topk,
+            Float temperature,
+            Integer randomSeed,
+            long loadId
+        ) {
+            this.modelPath = modelPath;
+            this.modelType = modelType;
+            this.maxTokens = maxTokens;
+            this.topk = topk;
+            this.temperature = temperature;
+            this.randomSeed = randomSeed;
+            this.loadId = loadId;
         }
     }
 }

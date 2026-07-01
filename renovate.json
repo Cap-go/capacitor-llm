@@ -47,7 +47,7 @@
     },
     {
       "matchManagers": [
-        "swift"
+        "swift-pm"
       ],
       "matchPackagePatterns": [
         "^https://github.com/ionic-team/capacitor-swift-pm\\.git$",
