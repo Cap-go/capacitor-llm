@@ -24,7 +24,7 @@ export interface LLMPlugin {
   /**
    * Sets the model configuration
    * - iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager.
-   * - Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
+   * - Android: Use "Gemini Nano" for the AICore system model on supported devices where it is already available. Prefer LiteRT-LM `.litertlm` bundles for custom models; legacy MediaPipe `.task` models are still supported
    * - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
    * @param options - The model configuration
    * @returns Promise that resolves when model is loaded
@@ -189,9 +189,9 @@ export interface ReadinessChangeEvent {
  * Only `path` is required. All other properties are optional overrides.
  */
 export interface ModelOptions {
-  /** Model path or "Apple Intelligence" for the Apple system model on iOS. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. */
+  /** Model path, "Apple Intelligence" for the Apple system model on iOS, or "Gemini Nano" for the Android AICore system model when already available on the device. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. */
   path: string;
-  /** Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations. */
+  /** Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, or `gemini-nano`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations. */
   modelType?: string;
   /** Maximum number of tokens the model handles */
   maxTokens?: number;
