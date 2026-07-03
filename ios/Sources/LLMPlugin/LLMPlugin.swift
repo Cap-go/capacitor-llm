@@ -407,11 +407,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         case "task":
             return .mediaPipe
         default:
-            #if canImport(LiteRTLM)
-            return .liteRtLm
-            #else
             return .mediaPipe
-            #endif
         }
     }
 
