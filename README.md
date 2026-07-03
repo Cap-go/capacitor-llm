@@ -12,7 +12,7 @@ On-device LLM support for Capacitor.
 Current platform strategy:
 
 - iOS: Apple Intelligence by default, plus LiteRT-LM `.litertlm` custom models when the plugin is integrated through Swift Package Manager
-- Android: LiteRT-LM for `.litertlm` bundles, with a compatibility fallback for legacy MediaPipe `.task` models
+- Android: Gemini Nano system model on supported devices where it is already available, LiteRT-LM for `.litertlm` bundles, and a compatibility fallback for legacy MediaPipe `.task` models
 - Web: Gemma 4 web models through `@mediapipe/tasks-genai`
 
 ## Documentation
@@ -71,9 +71,17 @@ const chat = await CapgoLLM.createChat();
 
 Recommended path:
 
+- Use Gemini Nano with `path: 'Gemini Nano'` when the Android device already has it available through AICore
 - Use LiteRT-LM `.litertlm` bundles
 - Gemma 4 E2B and E4B are good default examples
 - Models are available from the public [`litert-community`](https://huggingface.co/litert-community) Hugging Face repos
+
+Gemini Nano system model example:
+
+```ts
+await CapgoLLM.setModel({ path: 'Gemini Nano' });
+const chat = await CapgoLLM.createChat();
+```
 
 Quickstart with a downloaded Gemma 4 model:
 
@@ -230,7 +238,7 @@ setModel(options: ModelOptions) => Promise<void>
 
 Sets the model configuration
 - iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager.
-- Android: Prefer LiteRT-LM `.litertlm` bundles; legacy MediaPipe `.task` models are still supported
+- Android: Use "Gemini Nano" for the AICore system model on supported devices where it is already available. Prefer LiteRT-LM `.litertlm` bundles for custom models; legacy MediaPipe `.task` models are still supported
 - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
 
 | Param         | Type                                                  | Description               |
@@ -372,14 +380,14 @@ Get the native Capacitor plugin version.
 Model configuration options
 Only `path` is required. All other properties are optional overrides.
 
-| Prop              | Type                | Description                                                                                                                                                                                                                                    |
-| ----------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`path`**        | <code>string</code> | Model path or "Apple Intelligence" for the Apple system model on iOS. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |
-| **`modelType`**   | <code>string</code> | Optional. Model file type/extension (for example `task`, `bin`, or `litertlm`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations.                                                            |
-| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                                                                                                                                                     |
-| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                                                                                                                                              |
-| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                   |
-| **`randomSeed`**  | <code>number</code> | Optional. Random seed for generation.                                                                                                                                                                                                          |
+| Prop              | Type                | Description                                                                                                                                                                                                                                                                                                                             |
+| ----------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`path`**        | <code>string</code> | Model path, "Apple Intelligence" for the Apple system model on iOS, or "Gemini Nano" for the Android AICore system model when already available on the device. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |
+| **`modelType`**   | <code>string</code> | Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, or `gemini-nano`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations.                                                                                                                                      |
+| **`maxTokens`**   | <code>number</code> | Maximum number of tokens the model handles                                                                                                                                                                                                                                                                                              |
+| **`topk`**        | <code>number</code> | Number of tokens the model considers at each step                                                                                                                                                                                                                                                                                       |
+| **`temperature`** | <code>number</code> | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                                                                                                            |
+| **`randomSeed`**  | <code>number</code> | Optional. Random seed for generation.                                                                                                                                                                                                                                                                                                   |
 
 
 #### DownloadModelResult

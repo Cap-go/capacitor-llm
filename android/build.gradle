@@ -54,6 +54,7 @@ dependencies {
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
     implementation 'com.google.ai.edge.litertlm:litertlm-android:0.10.0'
     implementation 'com.google.mediapipe:tasks-genai:0.10.24'
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
