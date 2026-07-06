@@ -80,6 +80,7 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
         let temperature = call.getFloat("temperature") ?? 0.8
         let randomSeed = call.getInt("randomSeed") ?? 0
         let modelType = call.getString("modelType")
+        let backend = call.getString("backend")
 
         modelPath = path
         isReady = false
@@ -112,7 +113,11 @@ public class LLMPlugin: CAPPlugin, CAPBridgedPlugin {
             Task {
                 do {
                     let modelURL = try resolveModelURL(path: path, modelType: modelType)
-                    let engine = try await initializeLiteRtEngine(modelURL: modelURL, maxTokens: maxTokens)
+                    let engine = try await initializeLiteRtEngine(
+                        modelURL: modelURL,
+                        maxTokens: maxTokens,
+                        backend: backend
+                    )
                     liteRtEngine = engine
                     liteRtTopk = topk
                     liteRtTemperature = temperature
@@ -528,7 +533,11 @@ private extension LLMPlugin {
 
 #if canImport(LiteRTLM)
 private extension LLMPlugin {
-    func initializeLiteRtEngine(modelURL: URL, maxTokens: Int) async throws -> LiteRTLM.Engine {
+    func initializeLiteRtEngine(
+        modelURL: URL,
+        maxTokens: Int,
+        backend: String?
+    ) async throws -> LiteRTLM.Engine {
         guard let cacheDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             throw NSError(
                 domain: "CapgoLLM",
@@ -537,20 +546,25 @@ private extension LLMPlugin {
             )
         }
 
-        let configs = [
+        let cacheDir = cacheDirectory.path
+        let makeConfig = { (selectedBackend: LiteRTLM.Backend) throws -> LiteRTLM.EngineConfig in
             try LiteRTLM.EngineConfig(
                 modelPath: modelURL.path,
-                backend: .gpu,
+                backend: selectedBackend,
                 maxNumTokens: maxTokens,
-                cacheDir: cacheDirectory.path
-            ),
-            try LiteRTLM.EngineConfig(
-                modelPath: modelURL.path,
-                backend: .cpu(),
-                maxNumTokens: maxTokens,
-                cacheDir: cacheDirectory.path
+                cacheDir: cacheDir
             )
-        ]
+        }
+
+        let configs: [LiteRTLM.EngineConfig]
+        switch backend?.lowercased() {
+        case "cpu":
+            configs = [try makeConfig(.cpu())]
+        case "gpu":
+            configs = [try makeConfig(.gpu), try makeConfig(.cpu())]
+        default:
+            configs = [try makeConfig(.cpu()), try makeConfig(.gpu)]
+        }
 
         var lastError: Error?
         for config in configs {

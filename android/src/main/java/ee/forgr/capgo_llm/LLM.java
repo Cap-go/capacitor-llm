@@ -84,9 +84,10 @@ public class LLM {
         Integer topk,
         Float temperature,
         Integer randomSeed,
+        String backend,
         ModelLoadCallback callback
     ) {
-        ModelLoadRequest request = nextLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed);
+        ModelLoadRequest request = nextLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, backend);
         resetModelState();
 
         android.util.Log.d(
@@ -111,10 +112,11 @@ public class LLM {
         Integer maxTokens,
         Integer topk,
         Float temperature,
-        Integer randomSeed
+        Integer randomSeed,
+        String backend
     ) {
         currentLoadId += 1;
-        return new ModelLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, currentLoadId);
+        return new ModelLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, backend, currentLoadId);
     }
 
     private synchronized boolean isCurrentLoad(long loadId) {
@@ -210,17 +212,26 @@ public class LLM {
     }
 
     private Engine initializeLiteRtModel(String actualPath, ModelLoadRequest request) {
+        Backend primaryBackend = resolveLiteRtBackend(request.backend);
         EngineConfig config = new EngineConfig(
             actualPath,
-            new Backend.CPU(),
-            new Backend.CPU(),
-            new Backend.CPU(),
+            primaryBackend,
+            primaryBackend,
+            primaryBackend,
             request.maxTokens,
             context.getCacheDir().getAbsolutePath()
         );
         Engine loadedEngine = new Engine(config);
         loadedEngine.initialize();
         return loadedEngine;
+    }
+
+    private Backend resolveLiteRtBackend(String backend) {
+        if (backend != null && "gpu".equalsIgnoreCase(backend.trim())) {
+            return new Backend.GPU();
+        }
+
+        return new Backend.CPU();
     }
 
     private LlmInference initializeMediaPipeModel(String actualPath, ModelLoadRequest request) {
@@ -820,6 +831,7 @@ public class LLM {
         private final Integer topk;
         private final Float temperature;
         private final Integer randomSeed;
+        private final String backend;
         private final long loadId;
 
         private ModelLoadRequest(
@@ -829,6 +841,7 @@ public class LLM {
             Integer topk,
             Float temperature,
             Integer randomSeed,
+            String backend,
             long loadId
         ) {
             this.modelPath = modelPath;
@@ -837,6 +850,7 @@ public class LLM {
             this.topk = topk;
             this.temperature = temperature;
             this.randomSeed = randomSeed;
+            this.backend = backend;
             this.loadId = loadId;
         }
     }
