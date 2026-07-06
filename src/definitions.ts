@@ -201,4 +201,10 @@ export interface ModelOptions {
   temperature?: number;
   /** Optional. Random seed for generation. */
   randomSeed?: number;
+  /**
+   * Optional. LiteRT-LM engine backend for iOS (SwiftPM) and Android.
+   * Use `cpu` for stable long generations. When omitted, iOS prefers CPU then falls back to GPU; Android uses CPU.
+   * @since 8.2.0
+   */
+  backend?: 'gpu' | 'cpu';
 }

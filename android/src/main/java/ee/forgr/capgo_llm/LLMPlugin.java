@@ -106,6 +106,7 @@ public class LLMPlugin extends Plugin {
         Float temperature = call.getFloat("temperature", 0.8f);
         Integer randomSeed = call.getInt("randomSeed", 0);
         String modelType = call.getString("modelType");
+        String backend = call.getString("backend");
 
         llm.setModel(
             path,
@@ -114,6 +115,7 @@ public class LLMPlugin extends Plugin {
             topk,
             temperature,
             randomSeed,
+            backend,
             new LLM.ModelLoadCallback() {
                 @Override
                 public void onSuccess() {
