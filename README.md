@@ -11,7 +11,7 @@ On-device LLM support for Capacitor.
 
 Current platform strategy:
 
-- iOS: Apple Intelligence by default, plus LiteRT-LM `.litertlm` custom models when the plugin is integrated through Swift Package Manager
+- iOS: Apple Intelligence by default, plus LiteRT-LM `.litertlm` custom models in SwiftPM integrations when the path ends in `.litertlm` or `modelType: 'litertlm'` is passed
 - Android: Gemini Nano system model on supported devices where it is already available, LiteRT-LM for `.litertlm` bundles, and a compatibility fallback for legacy MediaPipe `.task` models
 - Web: Gemma 4 web models through `@mediapipe/tasks-genai`
 
@@ -56,7 +56,9 @@ Custom iOS LiteRT-LM path:
 
 - Available only when the plugin is integrated into the iOS app through Swift Package Manager
 - Uses the official LiteRT-LM Swift API and prebuilt iOS xcframework for `.litertlm` models
+- Selected only when the path ends in `.litertlm` or `modelType: 'litertlm'` is passed
 - CocoaPods builds keep Apple Intelligence and the legacy MediaPipe `.task` compatibility path
+- Other custom iOS model types keep the legacy MediaPipe compatibility path for backward compatibility
 
 Example:
 
@@ -158,11 +160,10 @@ await CapgoLLM.sendMessage({
   message: 'Explain why local inference is useful on mobile.',
 });
 ```
-
 ## Notes
 
 - Android now prefers LiteRT-LM and Gemma 4 style `.litertlm` bundles.
-- iOS LiteRT-LM custom-model support now uses the official LiteRT-LM Swift API and prebuilt iOS binaries, and is available only in SwiftPM integrations of this plugin.
+- iOS LiteRT-LM custom-model support now uses the official LiteRT-LM Swift API and prebuilt iOS binaries, is available only in SwiftPM integrations of this plugin, and is selected only for explicit `.litertlm` models.
 - CocoaPods builds on iOS should use Apple Intelligence or the legacy MediaPipe `.task` compatibility path.
 - Web uses Gemma 4 `*-web.task` artifacts through `@mediapipe/tasks-genai`.
 - Apple Intelligence remains the preferred default on iOS where available.
@@ -237,7 +238,7 @@ setModel(options: ModelOptions) => Promise<void>
 ```
 
 Sets the model configuration
-- iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager.
+- iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager, and are selected only when `modelType: 'litertlm'` is passed or the path ends in `.litertlm`.
 - Android: Use "Gemini Nano" for the AICore system model on supported devices where it is already available. Prefer LiteRT-LM `.litertlm` bundles for custom models; legacy MediaPipe `.task` models are still supported
 - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
 
@@ -383,7 +384,7 @@ Only `path` is required. All other properties are optional overrides.
 | Prop              | Type                        | Description                                                                                                                                                                                                                                                                                                                             | Since |
 | ----------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
 | **`path`**        | <code>string</code>         | Model path, "Apple Intelligence" for the Apple system model on iOS, or "Gemini Nano" for the Android AICore system model when already available on the device. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |       |
-| **`modelType`**   | <code>string</code>         | Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, or `gemini-nano`). If not provided, it is extracted from the path. Use `litertlm` on iOS only in SwiftPM integrations.                                                                                                                                      |       |
+| **`modelType`**   | <code>string</code>         | Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, or `gemini-nano`). If not provided, it is extracted from the path. On iOS, LiteRT-LM is selected only when this resolves to `litertlm`; all other custom types keep the legacy MediaPipe compatibility path.                                                |       |
 | **`maxTokens`**   | <code>number</code>         | Maximum number of tokens the model handles                                                                                                                                                                                                                                                                                              |       |
 | **`topk`**        | <code>number</code>         | Number of tokens the model considers at each step                                                                                                                                                                                                                                                                                       |       |
 | **`temperature`** | <code>number</code>         | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                                                                                                            |       |
