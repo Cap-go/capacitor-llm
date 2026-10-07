@@ -1,6 +1,6 @@
 # @capgo/capacitor-llm
 
-Run large language models on the device from your Capacitor app: Apple Intelligence on iOS, Gemini Nano or LiteRT-LM on Android, and Gemma web models in the browser. Private, offline and free per request.
+Run large language models on the device from your Capacitor app: Apple Intelligence on iOS, Gemini Nano or LiteRT-LM on Android, and Gemma web models in the browser. Private and free per request.
 
 <a href="https://capgo.app/?ref=plugin_llm"><img src="https://capgo.app/readme-banner.svg?repo=Cap-go/capacitor-llm" alt="Capgo - Instant updates for Capacitor" /></a>
 
@@ -21,7 +21,7 @@ Run large language models on the device from your Capacitor app: Apple Intellige
 - **Model choice**: `setModel()` picks Apple Intelligence, Gemini Nano or a custom `.litertlm` model.
 - **Model download**: `downloadModel()` fetches a model to the device with `downloadProgress` events.
 - **Readiness**: `getReadiness()` and the `readinessChange` event tell you when the model can answer.
-- **Platforms**: iOS, Android and Web. Web uses Gemma models through `@mediapipe/tasks-genai`.
+- **Platforms**: iOS, Android and Web. Web uses Gemma models through `@mediapipe/tasks-genai`. It loads the runtime from a CDN and needs the model file, so it works offline only once both are available locally.
 
 On-device LLM support for Capacitor.
 
