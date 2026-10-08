@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { CapacitorUpdater } from '@capgo/capacitor-updater';
 import { createApp } from 'vue';
 import App from './App.vue';
 import router from './router';
@@ -35,6 +37,12 @@ import '@ionic/vue/css/palettes/dark.system.css';
 import './theme/variables.css';
 
 const app = createApp(App).use(IonicVue).use(router);
+
+if (Capacitor.isNativePlatform()) {
+  CapacitorUpdater.notifyAppReady().catch((error) => {
+    console.error('Capgo notifyAppReady failed', error);
+  });
+}
 
 router.isReady().then(() => {
   app.mount('#app');
