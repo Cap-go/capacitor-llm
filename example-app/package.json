@@ -20,6 +20,7 @@
     "@capacitor/ios": "^8.5.2",
     "@capacitor/android": "^8.5.2",
     "@capgo/capacitor-llm": "file:..",
+    "@capgo/capacitor-updater": "^8.45.11",
     "@ionic/vue": "^8.0.0",
     "@ionic/vue-router": "^8.0.0",
     "ionicons": "^7.0.0",
