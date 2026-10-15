@@ -48,7 +48,7 @@
     "verify:web": "bun run build",
     "lint": "bun run eslint && bun run prettier -- --check && bun run swiftlint -- lint",
     "fmt": "bun run eslint -- --fix && bun run prettier -- --write && bun run swiftlint -- --fix --format",
-    "eslint": "eslint . --ext ts",
+    "eslint": "eslint",
     "prettier": "prettier-pretty-check \"**/*.{css,html,ts,js,java}\" --plugin=prettier-plugin-java",
     "swiftlint": "node-swiftlint",
     "docgen": "docgen --api LLMPlugin --output-readme README.md --output-json dist/docs.json",
@@ -67,12 +67,12 @@
     "@capacitor/core": "^8.0.0",
     "@capacitor/docgen": "^0.3.1",
     "@capacitor/ios": "^8.0.0",
-    "@ionic/eslint-config": "^0.4.0",
+    "@ionic/eslint-config": "^0.5.0",
     "@ionic/prettier-config": "^4.0.0",
     "@ionic/swiftlint-config": "^2.0.0",
     "@types/node": "^24.10.1",
     "@webgpu/types": "^0.1.64",
-    "eslint": "^8.57.1",
+    "eslint": "^10.0.0",
     "eslint-plugin-import": "^2.31.0",
     "google-protobuf": "^3.21.4",
     "prettier": "^3.6.2",
@@ -80,7 +80,7 @@
     "rimraf": "^6.1.0",
     "rollup": "^4.53.2",
     "swiftlint": "^2.0.0",
-    "typescript": "^5.9.3",
+    "typescript": "^6.0.3",
     "prettier-pretty-check": "^0.2.0"
   },
   "peerDependencies": {
@@ -89,9 +89,6 @@
   },
   "prettier": "@ionic/prettier-config",
   "swiftlint": "@ionic/swiftlint-config",
-  "eslintConfig": {
-    "extends": "@ionic/eslint-config/recommended"
-  },
   "capacitor": {
     "ios": {
       "src": "ios"
