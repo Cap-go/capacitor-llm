@@ -107,6 +107,7 @@ public class LLMPlugin extends Plugin {
         Integer randomSeed = call.getInt("randomSeed", 0);
         String modelType = call.getString("modelType");
         String backend = call.getString("backend");
+        String androidGeminiBackend = call.getString("androidGeminiBackend");
 
         llm.setModel(
             path,
@@ -116,6 +117,7 @@ public class LLMPlugin extends Plugin {
             temperature,
             randomSeed,
             backend,
+            androidGeminiBackend,
             new LLM.ModelLoadCallback() {
                 @Override
                 public void onSuccess() {
