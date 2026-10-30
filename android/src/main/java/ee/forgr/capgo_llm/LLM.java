@@ -394,39 +394,14 @@ public class LLM {
     }
 
     private BackendType resolveBackend(String path, String modelType, String androidGeminiBackend) {
-        if (isGeminiNanoModel(path, modelType)) {
-            if (shouldUseGeminiNanoAgentBackend(modelType, androidGeminiBackend)) {
+        if (GeminiNanoBackendSelection.isGeminiNanoModel(path, modelType)) {
+            if (GeminiNanoBackendSelection.shouldUseAgentBackend(modelType, androidGeminiBackend)) {
                 return BackendType.GEMINI_NANO_AGENT;
             }
             return BackendType.GEMINI_NANO;
         }
 
         return "litertlm".equals(normalizeModelType(path, modelType)) ? BackendType.LITERT : BackendType.MEDIAPIPE;
-    }
-
-    private boolean shouldUseGeminiNanoAgentBackend(String modelType, String androidGeminiBackend) {
-        if (modelType != null && "gemini-nano-agent".equalsIgnoreCase(modelType.trim())) {
-            return true;
-        }
-
-        return androidGeminiBackend != null && "agent".equalsIgnoreCase(androidGeminiBackend.trim());
-    }
-
-    private boolean isGeminiNanoModel(String path, String modelType) {
-        return isGeminiNanoSystemName(modelType) || isGeminiNanoSystemName(path);
-    }
-
-    private boolean isGeminiNanoSystemName(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-
-        String normalized = normalizeSystemModelName(value);
-        return "gemininano".equals(normalized) || "gemininanoagent".equals(normalized);
-    }
-
-    private String normalizeSystemModelName(String value) {
-        return stripUrlSuffix(value).toLowerCase().replace("-", "").replace("_", "").replace(" ", "");
     }
 
     private String normalizeModelType(String path, String modelType) {
