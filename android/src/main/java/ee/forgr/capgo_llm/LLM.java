@@ -413,8 +413,16 @@ public class LLM {
     }
 
     private boolean isGeminiNanoModel(String path, String modelType) {
-        String requestedModel = modelType != null && !modelType.isBlank() ? modelType : path;
-        return "gemininano".equals(normalizeSystemModelName(requestedModel));
+        return isGeminiNanoSystemName(modelType) || isGeminiNanoSystemName(path);
+    }
+
+    private boolean isGeminiNanoSystemName(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+
+        String normalized = normalizeSystemModelName(value);
+        return "gemininano".equals(normalized) || "gemininanoagent".equals(normalized);
     }
 
     private String normalizeSystemModelName(String value) {
