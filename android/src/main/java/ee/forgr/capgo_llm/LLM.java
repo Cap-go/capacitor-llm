@@ -60,7 +60,7 @@ public class LLM {
     private String modelPath = null;
     private String modelType = null;
     private BackendType activeBackend = BackendType.LITERT;
-    private long currentLoadId = 0L;
+    private final ModelLoadSequence loadSequence = new ModelLoadSequence();
 
     private Integer maxTokens = 2048;
     private Integer topk = 40;
@@ -129,7 +129,6 @@ public class LLM {
         String backend,
         String androidGeminiBackend
     ) {
-        currentLoadId += 1;
         return new ModelLoadRequest(
             path,
             modelType,
@@ -139,12 +138,12 @@ public class LLM {
             randomSeed,
             backend,
             androidGeminiBackend,
-            currentLoadId
+            loadSequence.nextLoadId()
         );
     }
 
     private synchronized boolean isCurrentLoad(long loadId) {
-        return loadId == currentLoadId;
+        return loadSequence.isCurrentLoad(loadId);
     }
 
     private void initializeModel(ModelLoadRequest request, ModelLoadCallback callback) {
@@ -365,6 +364,10 @@ public class LLM {
                 @Override
                 public void onError(String error) {
                     client.shutdown();
+                    if (!isCurrentLoad(request.loadId)) {
+                        notifySupersededLoad(callback);
+                        return;
+                    }
                     resetModelState();
                     if (callback != null) {
                         callback.onError(error);
