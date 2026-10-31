@@ -1,5 +1,7 @@
 package ee.forgr.capgo_llm;
 
+import java.util.Locale;
+
 public final class GeminiNanoBackendSelection {
 
     private GeminiNanoBackendSelection() {}
@@ -9,7 +11,7 @@ public final class GeminiNanoBackendSelection {
     }
 
     public static boolean shouldUseAgentBackend(String modelType, String androidGeminiBackend) {
-        if (modelType != null && !modelType.isBlank()) {
+        if (!isNullOrBlank(modelType)) {
             if ("gemininanoagent".equals(normalizeSystemModelName(modelType))) {
                 return true;
             }
@@ -19,7 +21,7 @@ public final class GeminiNanoBackendSelection {
     }
 
     private static boolean isGeminiNanoSystemName(String value) {
-        if (value == null || value.isBlank()) {
+        if (isNullOrBlank(value)) {
             return false;
         }
 
@@ -28,7 +30,11 @@ public final class GeminiNanoBackendSelection {
     }
 
     private static String normalizeSystemModelName(String value) {
-        return stripUrlSuffix(value).toLowerCase().replace("-", "").replace("_", "").replace(" ", "");
+        return stripUrlSuffix(value).toLowerCase(Locale.ROOT).replace("-", "").replace("_", "").replace(" ", "");
+    }
+
+    private static boolean isNullOrBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private static String stripUrlSuffix(String value) {
