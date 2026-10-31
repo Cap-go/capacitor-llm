@@ -52,11 +52,15 @@ if (includeGenaiAgentFlag == 'true') {
     }
 }
 
+def configuredMinSdk = project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+// genai-agent:1.0.0-alpha1 requires API 26 when linked as implementation; keep API 24 when the agent is disabled.
+def effectiveMinSdk = includeGenaiAgentFlag == 'true' ? Math.max(configuredMinSdk, 26) : configuredMinSdk
+
 android {
     namespace = "ee.forgr.capgo_llm"
     compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
     defaultConfig {
-        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        minSdkVersion effectiveMinSdk
         targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 36
         versionCode 1
         versionName "1.0"
@@ -105,6 +109,7 @@ dependencies {
     if (genaiAgentDependencyTypeFlag == 'compileOnly') {
         compileOnly 'com.google.mlkit:genai-agent:1.0.0-alpha1'
     } else if (includeGenaiAgentFlag == 'true') {
+        // Host apps must use minSdk 26+ when this flag is true (see effectiveMinSdk above).
         implementation 'com.google.mlkit:genai-agent:1.0.0-alpha1'
         implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2'
     }

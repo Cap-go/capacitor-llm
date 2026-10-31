@@ -4,7 +4,10 @@ import android.content.Context
 import com.google.mlkit.genai.agent.Agent
 import com.google.mlkit.genai.agent.AgentRunner
 import com.google.mlkit.genai.agent.textTokens
+import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Content
+import com.google.mlkit.genai.prompt.Generation
+import ee.forgr.capgo_llm.GeminiNanoAvailability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +24,13 @@ class GeminiNanoAgentClientImpl(context: Context) : GeminiNanoAgentClient {
         scope.launch {
             try {
                 shutdownRunnerOnly()
+                val status = Generation.getClient().checkStatus()
+                if (status != FeatureStatus.AVAILABLE) {
+                    callback.onError(
+                        "Gemini Nano agent is ${GeminiNanoAvailability.describe(status)} on this device",
+                    )
+                    return@launch
+                }
                 val agent =
                     Agent.builder()
                         .setName("CapgoLLM")

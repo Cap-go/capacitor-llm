@@ -14,7 +14,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions;
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession;
-import com.google.mlkit.genai.common.FeatureStatus;
 import com.google.mlkit.genai.common.StreamingCallback;
 import com.google.mlkit.genai.prompt.Candidate;
 import com.google.mlkit.genai.prompt.GenerateContentRequest;
@@ -294,7 +293,7 @@ public class LLM {
                     }
 
                     Integer status = statusFuture.get();
-                    if (status == FeatureStatus.AVAILABLE) {
+                    if (GeminiNanoAvailability.isAvailable(status)) {
                         applyLoadedModel(request, BackendType.GEMINI_NANO, null, null, loadedModel, null);
                         if (callback != null) {
                             callback.onSuccess();
@@ -304,7 +303,7 @@ public class LLM {
 
                     resetModelState();
                     if (callback != null) {
-                        callback.onError("Gemini Nano is " + geminiNanoStatusName(status) + " on this device");
+                        callback.onError("Gemini Nano is " + GeminiNanoAvailability.describe(status) + " on this device");
                     }
                 } catch (CancellationException | ExecutionException exception) {
                     resetModelState();
@@ -375,25 +374,6 @@ public class LLM {
                 }
             }
         );
-    }
-
-    private String geminiNanoStatusName(Integer status) {
-        if (status == null) {
-            return "unknown";
-        }
-
-        switch (status) {
-            case FeatureStatus.UNAVAILABLE:
-                return "unavailable";
-            case FeatureStatus.DOWNLOADABLE:
-                return "downloadable but not downloaded";
-            case FeatureStatus.DOWNLOADING:
-                return "downloading";
-            case FeatureStatus.AVAILABLE:
-                return "available";
-            default:
-                return "unknown";
-        }
     }
 
     private BackendType resolveBackend(String path, String modelType, String androidGeminiBackend) {
