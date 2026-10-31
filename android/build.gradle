@@ -1,5 +1,21 @@
-def includeGenaiAgentFlag = (project.findProperty('capacitorLLM.genaiAgent.include') ?: 'false').toString()
-def genaiAgentDependencyTypeFlag = (project.findProperty('capacitorLLM.genaiAgent.dependencyType') ?: 'implementation').toString()
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+def pluginGradleProperties = new Properties()
+def pluginGradlePropertiesFile = file('gradle.properties')
+if (pluginGradlePropertiesFile.isFile()) {
+    pluginGradlePropertiesFile.withInputStream { pluginGradleProperties.load(it) }
+}
+
+def includeGenaiAgentFlag = (
+    project.findProperty('capacitorLLM.genaiAgent.include')
+        ?: pluginGradleProperties.getProperty('capacitorLLM.genaiAgent.include')
+        ?: 'false'
+).toString()
+def genaiAgentDependencyTypeFlag = (
+    project.findProperty('capacitorLLM.genaiAgent.dependencyType')
+        ?: pluginGradleProperties.getProperty('capacitorLLM.genaiAgent.dependencyType')
+        ?: 'implementation'
+).toString()
 
 ext {
     junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
@@ -28,6 +44,14 @@ if (includeGenaiAgentFlag == 'true') {
 
 apply plugin: 'com.android.library'
 
+if (includeGenaiAgentFlag == 'true') {
+    kotlin {
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_21
+        }
+    }
+}
+
 android {
     namespace = "ee.forgr.capgo_llm"
     compileSdk = project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 36
@@ -50,11 +74,6 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
-    }
-    if (includeGenaiAgentFlag == 'true') {
-        kotlinOptions {
-            jvmTarget = '21'
-        }
     }
 
     sourceSets {
