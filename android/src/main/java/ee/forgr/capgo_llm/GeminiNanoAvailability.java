@@ -2,15 +2,15 @@ package ee.forgr.capgo_llm;
 
 import com.google.mlkit.genai.common.FeatureStatus;
 
-final class GeminiNanoAvailability {
+public final class GeminiNanoAvailability {
 
     private GeminiNanoAvailability() {}
 
-    static boolean isAvailable(Integer status) {
+    public static boolean isAvailable(Integer status) {
         return status != null && status == FeatureStatus.AVAILABLE;
     }
 
-    static String describe(Integer status) {
+    public static String describe(Integer status) {
         if (status == null) {
             return "unknown";
         }
