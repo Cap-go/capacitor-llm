@@ -246,6 +246,7 @@ interface Model {
   maxTokens?: number;
   note?: string;
   downloadedPath?: string;
+  androidGeminiBackend?: 'prompt' | 'agent';
 }
 
 // Available models
@@ -268,6 +269,15 @@ const models: { ios: Model[], android: Model[], web: Model[] } = {
     }
   ],
   android: [
+    {
+      id: 'gemini-nano-agent',
+      name: 'Gemini Nano (ML Kit Agent)',
+      needsDownload: false,
+      path: 'Gemini Nano',
+      androidGeminiBackend: 'agent',
+      maxTokens: 1024,
+      note: 'Requires genai-agent opt-in in Gradle and a supported AICore device (Android 14+, Gemini Nano v4).'
+    },
     {
       id: 'gemma4-e2b-download',
       name: 'Gemma 4 E2B (LiteRT-LM)',
@@ -529,7 +539,8 @@ const applyModel = async (model: Model) => {
     modelType: model.modelType,
     maxTokens: model.maxTokens,
     topk: 40,
-    temperature: 0.8
+    temperature: 0.8,
+    androidGeminiBackend: model.androidGeminiBackend,
   });
 };
 

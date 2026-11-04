@@ -102,6 +102,55 @@ await CapgoLLM.setModel({ path: 'Gemini Nano' });
 const chat = await CapgoLLM.createChat();
 ```
 
+#### Optional: ML Kit GenAI Agent API (Gemini Nano agentic workflows)
+
+Google's ML Kit GenAI Agent API (`com.google.mlkit:genai-agent:1.0.0-alpha1`) adds `AgentRunner` managed multi-turn sessions on top of Gemini Nano (including Gemini Nano v4 on supported devices). It is **opt-in** so apps that do not use it do not pull the dependency.
+
+Docs:
+
+- [Agentic workflows overview](https://developers.google.com/ml-kit/genai/agent/android/)
+- [Get started](https://developers.google.com/ml-kit/genai/agent/android/get-started/)
+- [ML Kit GenAI overview](https://developers.google.com/ml-kit/genai/)
+- [Release notes](https://developers.google.com/ml-kit/release-notes/)
+
+**Enable the native dependency** (pick one):
+
+1. `capacitor.config.ts` (runs `capacitor:sync:before` hook):
+
+```ts
+plugins: {
+  CapgoLLM: {
+    android: {
+      genaiAgent: {
+        include: true,
+        dependencyType: 'implementation',
+      },
+    },
+  },
+},
+```
+
+2. App `android/gradle.properties` or `variables.gradle`:
+
+```properties
+capacitorLLM.genaiAgent.include=true
+```
+
+**Use the agent backend** (default remains direct `genai-prompt` access):
+
+```ts
+await CapgoLLM.setModel({
+  path: 'Gemini Nano',
+  androidGeminiBackend: 'agent',
+});
+```
+
+**Requirements:** Android API 26+, Android 14 (API 34)+ with AICore for agent previews, Kotlin 2.3+ in the plugin when enabled. See Google's device support list for Gemini Nano model versions.
+
+**Fallback:** If `genai-agent` is not included, `androidGeminiBackend: 'agent'` fails model load with a clear error. Use `androidGeminiBackend: 'prompt'` (default) or omit the field for the existing Prompt API path.
+
+**compileOnly:** Set `dependencyType: 'compileOnly'` in config when your app adds `implementation 'com.google.mlkit:genai-agent:1.0.0-alpha1'` itself.
+
 Quickstart with a downloaded Gemma 4 model:
 
 ```ts
@@ -256,7 +305,7 @@ setModel(options: ModelOptions) => Promise<void>
 
 Sets the model configuration
 - iOS: Use "Apple Intelligence" as path for the system model. Custom LiteRT-LM `.litertlm` models are supported on iOS only when this plugin is integrated through Swift Package Manager, and are selected only when `modelType: 'litertlm'` is passed or the path ends in `.litertlm`.
-- Android: Use "Gemini Nano" for the AICore system model on supported devices where it is already available. Prefer LiteRT-LM `.litertlm` bundles for custom models; legacy MediaPipe `.task` models are still supported
+- Android: Use "Gemini Nano" for the AICore system model on supported devices where it is already available. Set `androidGeminiBackend: 'agent'` to use the ML Kit GenAI Agent API (`com.google.mlkit:genai-agent`) for managed multi-turn Gemini Nano sessions (opt-in native dependency). Prefer LiteRT-LM `.litertlm` bundles for custom models; legacy MediaPipe `.task` models are still supported
 - Web: Provide a web-ready model asset for `@mediapipe/tasks-genai` such as Gemma 4 `*-web.task`
 
 | Param         | Type                                                  | Description               |
@@ -398,15 +447,16 @@ Get the native Capacitor plugin version.
 Model configuration options
 Only `path` is required. All other properties are optional overrides.
 
-| Prop              | Type                        | Description                                                                                                                                                                                                                                                                                                                             | Since |
-| ----------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
-| **`path`**        | <code>string</code>         | Model path, "Apple Intelligence" for the Apple system model on iOS, or "Gemini Nano" for the Android AICore system model when already available on the device. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |       |
-| **`modelType`**   | <code>string</code>         | Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, or `gemini-nano`). If not provided, it is extracted from the path. On iOS, LiteRT-LM is selected only when this resolves to `litertlm`; all other custom types keep the legacy MediaPipe compatibility path.                                                |       |
-| **`maxTokens`**   | <code>number</code>         | Maximum number of tokens the model handles                                                                                                                                                                                                                                                                                              |       |
-| **`topk`**        | <code>number</code>         | Number of tokens the model considers at each step                                                                                                                                                                                                                                                                                       |       |
-| **`temperature`** | <code>number</code>         | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                                                                                                            |       |
-| **`randomSeed`**  | <code>number</code>         | Optional. Random seed for generation.                                                                                                                                                                                                                                                                                                   |       |
-| **`backend`**     | <code>'gpu' \| 'cpu'</code> | Optional. LiteRT-LM engine backend for iOS (SwiftPM) and Android. Use `cpu` for stable long generations. When omitted, iOS prefers CPU then falls back to GPU; Android uses CPU.                                                                                                                                                        | 8.2.0 |
+| Prop                       | Type                             | Description                                                                                                                                                                                                                                                                                                                             | Since |
+| -------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **`path`**                 | <code>string</code>              | Model path, "Apple Intelligence" for the Apple system model on iOS, or "Gemini Nano" for the Android AICore system model when already available on the device. On iOS, custom `.litertlm` models require the plugin to be integrated through Swift Package Manager. Gemma 4 examples use `.litertlm` on mobile and `*-web.task` on web. |       |
+| **`modelType`**            | <code>string</code>              | Optional. Model file type/extension (for example `task`, `bin`, `litertlm`, `gemini-nano`, or `gemini-nano-agent`). If not provided, it is extracted from the path. On iOS, LiteRT-LM is selected only when this resolves to `litertlm`; all other custom types keep the legacy MediaPipe compatibility path.                           |       |
+| **`maxTokens`**            | <code>number</code>              | Maximum number of tokens the model handles                                                                                                                                                                                                                                                                                              |       |
+| **`topk`**                 | <code>number</code>              | Number of tokens the model considers at each step                                                                                                                                                                                                                                                                                       |       |
+| **`temperature`**          | <code>number</code>              | Amount of randomness in generation (0.0-1.0)                                                                                                                                                                                                                                                                                            |       |
+| **`randomSeed`**           | <code>number</code>              | Optional. Random seed for generation.                                                                                                                                                                                                                                                                                                   |       |
+| **`backend`**              | <code>'gpu' \| 'cpu'</code>      | Optional. LiteRT-LM engine backend for iOS (SwiftPM) and Android. Use `cpu` for stable long generations. When omitted, iOS prefers CPU then falls back to GPU; Android uses CPU.                                                                                                                                                        | 8.2.0 |
+| **`androidGeminiBackend`** | <code>'prompt' \| 'agent'</code> | Optional. Android-only Gemini Nano integration. Defaults to `prompt` (ML Kit `genai-prompt` direct model access). Use `agent` for ML Kit GenAI Agent API (`com.google.mlkit:genai-agent`) with `AgentRunner` managed sessions. Requires opting in to the native dependency in Gradle (see README). Ignored on iOS and web.              | 8.2.0 |
 
 
 #### DownloadModelResult

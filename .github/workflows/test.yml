@@ -41,9 +41,11 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '21'
-      - name: Build
+      - name: Build Android (default, genai-agent disabled)
         id: build_code
-        run: npm run verify:android
+        run: bun run verify:android
+      - name: Build Android (genai-agent enabled)
+        run: bun run verify:android:genai-agent
   build_ios:
     timeout-minutes: 30
     runs-on: macOS-latest

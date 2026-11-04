@@ -14,7 +14,6 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference;
 import com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions;
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession;
-import com.google.mlkit.genai.common.FeatureStatus;
 import com.google.mlkit.genai.common.StreamingCallback;
 import com.google.mlkit.genai.prompt.Candidate;
 import com.google.mlkit.genai.prompt.GenerateContentRequest;
@@ -22,6 +21,7 @@ import com.google.mlkit.genai.prompt.GenerateContentResponse;
 import com.google.mlkit.genai.prompt.Generation;
 import com.google.mlkit.genai.prompt.TextPart;
 import com.google.mlkit.genai.prompt.java.GenerativeModelFutures;
+import ee.forgr.capgo_llm.agent.GeminiNanoAgentClient;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -40,7 +40,8 @@ public class LLM {
     private enum BackendType {
         LITERT,
         MEDIAPIPE,
-        GEMINI_NANO
+        GEMINI_NANO,
+        GEMINI_NANO_AGENT
     }
 
     private static final double DEFAULT_TOP_P = 0.95d;
@@ -52,12 +53,13 @@ public class LLM {
 
     private Engine engine;
     private GenerativeModelFutures geminiNanoModel;
+    private GeminiNanoAgentClient geminiNanoAgentClient;
     private LlmInference llmInference;
     private boolean isReady = false;
     private String modelPath = null;
     private String modelType = null;
     private BackendType activeBackend = BackendType.LITERT;
-    private long currentLoadId = 0L;
+    private final ModelLoadSequence loadSequence = new ModelLoadSequence();
 
     private Integer maxTokens = 2048;
     private Integer topk = 40;
@@ -85,9 +87,19 @@ public class LLM {
         Float temperature,
         Integer randomSeed,
         String backend,
+        String androidGeminiBackend,
         ModelLoadCallback callback
     ) {
-        ModelLoadRequest request = nextLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, backend);
+        ModelLoadRequest request = nextLoadRequest(
+            path,
+            modelType,
+            maxTokens,
+            topk,
+            temperature,
+            randomSeed,
+            backend,
+            androidGeminiBackend
+        );
         resetModelState();
 
         android.util.Log.d(
@@ -113,14 +125,24 @@ public class LLM {
         Integer topk,
         Float temperature,
         Integer randomSeed,
-        String backend
+        String backend,
+        String androidGeminiBackend
     ) {
-        currentLoadId += 1;
-        return new ModelLoadRequest(path, modelType, maxTokens, topk, temperature, randomSeed, backend, currentLoadId);
+        return new ModelLoadRequest(
+            path,
+            modelType,
+            maxTokens,
+            topk,
+            temperature,
+            randomSeed,
+            backend,
+            androidGeminiBackend,
+            loadSequence.nextLoadId()
+        );
     }
 
     private synchronized boolean isCurrentLoad(long loadId) {
-        return loadId == currentLoadId;
+        return loadSequence.isCurrentLoad(loadId);
     }
 
     private void initializeModel(ModelLoadRequest request, ModelLoadCallback callback) {
@@ -138,8 +160,10 @@ public class LLM {
                     return;
                 }
 
-                BackendType backend = resolveBackend(request.modelPath, request.modelType);
-                String actualPath = backend == BackendType.GEMINI_NANO ? request.modelPath : resolveModelPath(request.modelPath, backend);
+                BackendType backend = resolveBackend(request.modelPath, request.modelType, request.androidGeminiBackend);
+                String actualPath = backend == BackendType.GEMINI_NANO || backend == BackendType.GEMINI_NANO_AGENT
+                    ? request.modelPath
+                    : resolveModelPath(request.modelPath, backend);
 
                 android.util.Log.d("LLM", "Resolved model path: " + actualPath + " using backend: " + backend);
 
@@ -150,10 +174,15 @@ public class LLM {
                         notifySupersededLoad(callback);
                         return;
                     }
-                    applyLoadedModel(request, backend, loadedEngine, null, null);
+                    applyLoadedModel(request, backend, loadedEngine, null, null, null);
                 } else {
                     if (backend == BackendType.GEMINI_NANO) {
                         initializeGeminiNanoModel(request, callback);
+                        return;
+                    }
+
+                    if (backend == BackendType.GEMINI_NANO_AGENT) {
+                        initializeGeminiNanoAgentModel(request, callback);
                         return;
                     }
 
@@ -163,7 +192,7 @@ public class LLM {
                         notifySupersededLoad(callback);
                         return;
                     }
-                    applyLoadedModel(request, backend, null, loadedInference, null);
+                    applyLoadedModel(request, backend, null, loadedInference, null, null);
                 }
 
                 if (callback != null) {
@@ -196,7 +225,8 @@ public class LLM {
         BackendType backend,
         Engine loadedEngine,
         LlmInference loadedInference,
-        GenerativeModelFutures loadedGeminiNanoModel
+        GenerativeModelFutures loadedGeminiNanoModel,
+        GeminiNanoAgentClient loadedGeminiNanoAgentClient
     ) {
         modelPath = request.modelPath;
         modelType = request.modelType;
@@ -208,6 +238,7 @@ public class LLM {
         engine = loadedEngine;
         llmInference = loadedInference;
         geminiNanoModel = loadedGeminiNanoModel;
+        geminiNanoAgentClient = loadedGeminiNanoAgentClient;
         isReady = true;
     }
 
@@ -262,8 +293,8 @@ public class LLM {
                     }
 
                     Integer status = statusFuture.get();
-                    if (status == FeatureStatus.AVAILABLE) {
-                        applyLoadedModel(request, BackendType.GEMINI_NANO, null, null, loadedModel);
+                    if (GeminiNanoAvailability.isAvailable(status)) {
+                        applyLoadedModel(request, BackendType.GEMINI_NANO, null, null, loadedModel, null);
                         if (callback != null) {
                             callback.onSuccess();
                         }
@@ -272,7 +303,7 @@ public class LLM {
 
                     resetModelState();
                     if (callback != null) {
-                        callback.onError("Gemini Nano is " + geminiNanoStatusName(status) + " on this device");
+                        callback.onError("Gemini Nano is " + GeminiNanoAvailability.describe(status) + " on this device");
                     }
                 } catch (CancellationException | ExecutionException exception) {
                     resetModelState();
@@ -291,40 +322,69 @@ public class LLM {
         );
     }
 
-    private String geminiNanoStatusName(Integer status) {
-        if (status == null) {
-            return "unknown";
+    private void initializeGeminiNanoAgentModel(ModelLoadRequest request, ModelLoadCallback callback) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (callback != null) {
+                callback.onError("Gemini Nano agent requires Android API 26 or higher");
+            }
+            return;
         }
 
-        switch (status) {
-            case FeatureStatus.UNAVAILABLE:
-                return "unavailable";
-            case FeatureStatus.DOWNLOADABLE:
-                return "downloadable but not downloaded";
-            case FeatureStatus.DOWNLOADING:
-                return "downloading";
-            case FeatureStatus.AVAILABLE:
-                return "available";
-            default:
-                return "unknown";
+        GeminiNanoAgentClient client = GeminiNanoAgentClient.create(context);
+        if (!client.isCompiledIn()) {
+            resetModelState();
+            if (callback != null) {
+                callback.onError(
+                    "ML Kit GenAI Agent (genai-agent) is not included in this build. " +
+                        "Set capacitorLLM.genaiAgent.include=true in android/gradle.properties " +
+                        "or enable CapgoLLM.android.genaiAgent in capacitor.config.ts, then run cap sync."
+                );
+            }
+            return;
         }
+
+        client.initialize(
+            null,
+            new GeminiNanoAgentClient.InitCallback() {
+                @Override
+                public void onSuccess() {
+                    if (!isCurrentLoad(request.loadId)) {
+                        client.shutdown();
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+
+                    applyLoadedModel(request, BackendType.GEMINI_NANO_AGENT, null, null, null, client);
+                    if (callback != null) {
+                        callback.onSuccess();
+                    }
+                }
+
+                @Override
+                public void onError(String error) {
+                    client.shutdown();
+                    if (!isCurrentLoad(request.loadId)) {
+                        notifySupersededLoad(callback);
+                        return;
+                    }
+                    resetModelState();
+                    if (callback != null) {
+                        callback.onError(error);
+                    }
+                }
+            }
+        );
     }
 
-    private BackendType resolveBackend(String path, String modelType) {
-        if (isGeminiNanoModel(path, modelType)) {
+    private BackendType resolveBackend(String path, String modelType, String androidGeminiBackend) {
+        if (GeminiNanoBackendSelection.isGeminiNanoModel(path, modelType)) {
+            if (GeminiNanoBackendSelection.shouldUseAgentBackend(modelType, androidGeminiBackend)) {
+                return BackendType.GEMINI_NANO_AGENT;
+            }
             return BackendType.GEMINI_NANO;
         }
 
         return "litertlm".equals(normalizeModelType(path, modelType)) ? BackendType.LITERT : BackendType.MEDIAPIPE;
-    }
-
-    private boolean isGeminiNanoModel(String path, String modelType) {
-        String requestedModel = modelType != null && !modelType.isBlank() ? modelType : path;
-        return "gemininano".equals(normalizeSystemModelName(requestedModel));
-    }
-
-    private String normalizeSystemModelName(String value) {
-        return stripUrlSuffix(value).toLowerCase().replace("-", "").replace("_", "").replace(" ", "");
     }
 
     private String normalizeModelType(String path, String modelType) {
@@ -415,6 +475,11 @@ public class LLM {
                 throw new IllegalStateException("Gemini Nano model not initialized");
             }
             session = ChatSession.forGeminiNano();
+        } else if (activeBackend == BackendType.GEMINI_NANO_AGENT) {
+            if (geminiNanoAgentClient == null) {
+                throw new IllegalStateException("Gemini Nano agent not initialized");
+            }
+            session = ChatSession.forGeminiNanoAgent();
         } else {
             if (llmInference == null) {
                 throw new IllegalStateException("MediaPipe model not initialized");
@@ -444,6 +509,7 @@ public class LLM {
         ChatSession session;
         LlmInference inference;
         GenerativeModelFutures nanoModel;
+        GeminiNanoAgentClient nanoAgentClient;
         Integer sessionTopk;
         Float sessionTemperature;
         Integer sessionMaxTokens;
@@ -460,6 +526,7 @@ public class LLM {
 
             inference = llmInference;
             nanoModel = geminiNanoModel;
+            nanoAgentClient = geminiNanoAgentClient;
             sessionTopk = topk;
             sessionTemperature = temperature;
             sessionMaxTokens = maxTokens;
@@ -490,11 +557,48 @@ public class LLM {
             return;
         }
 
+        if (session.backendType == BackendType.GEMINI_NANO_AGENT) {
+            if (nanoAgentClient == null) {
+                throw new IllegalStateException("Gemini Nano agent not ready");
+            }
+
+            sendMessageWithGeminiNanoAgent(chatId, message, nanoAgentClient, callback);
+            return;
+        }
+
         if (inference == null) {
             throw new IllegalStateException("MediaPipe model not ready");
         }
 
         sendMessageWithMediaPipe(chatId, message, session, inference, sessionTopk, sessionTemperature, callback);
+    }
+
+    private void sendMessageWithGeminiNanoAgent(
+        String chatId,
+        String message,
+        GeminiNanoAgentClient agentClient,
+        MessageCallback callback
+    ) {
+        agentClient.sendMessage(
+            chatId,
+            message,
+            new GeminiNanoAgentClient.MessageCallback() {
+                @Override
+                public void onText(String token) {
+                    callback.onTextReceived(chatId, token, true);
+                }
+
+                @Override
+                public void onComplete() {
+                    callback.onComplete(chatId);
+                }
+
+                @Override
+                public void onError(String error) {
+                    callback.onError(error);
+                }
+            }
+        );
     }
 
     private void sendMessageWithLiteRt(String chatId, String message, ChatSession session, MessageCallback callback) {
@@ -723,6 +827,10 @@ public class LLM {
         engine = null;
         llmInference = null;
         geminiNanoModel = null;
+        if (geminiNanoAgentClient != null) {
+            geminiNanoAgentClient.shutdown();
+            geminiNanoAgentClient = null;
+        }
         modelPath = null;
         modelType = null;
         isReady = false;
@@ -759,13 +867,18 @@ public class LLM {
     }
 
     private void clearChatSessions() {
-        for (ChatSession session : chatSessions.values()) {
+        for (Map.Entry<String, ChatSession> entry : chatSessions.entrySet()) {
+            ChatSession session = entry.getValue();
             if (session.conversation != null) {
                 try {
                     session.conversation.close();
                 } catch (Exception exception) {
                     android.util.Log.w("LLM", "Failed to close LiteRT-LM conversation", exception);
                 }
+            }
+
+            if (session.backendType == BackendType.GEMINI_NANO_AGENT && geminiNanoAgentClient != null) {
+                geminiNanoAgentClient.closeSession(entry.getKey());
             }
         }
 
@@ -807,6 +920,10 @@ public class LLM {
             return new ChatSession(BackendType.GEMINI_NANO, null);
         }
 
+        static ChatSession forGeminiNanoAgent() {
+            return new ChatSession(BackendType.GEMINI_NANO_AGENT, null);
+        }
+
         void addMessage(String role, String content) {
             if (history.length() > 0) {
                 history.append("\n");
@@ -832,6 +949,7 @@ public class LLM {
         private final Float temperature;
         private final Integer randomSeed;
         private final String backend;
+        private final String androidGeminiBackend;
         private final long loadId;
 
         private ModelLoadRequest(
@@ -842,6 +960,7 @@ public class LLM {
             Float temperature,
             Integer randomSeed,
             String backend,
+            String androidGeminiBackend,
             long loadId
         ) {
             this.modelPath = modelPath;
@@ -851,6 +970,7 @@ public class LLM {
             this.temperature = temperature;
             this.randomSeed = randomSeed;
             this.backend = backend;
+            this.androidGeminiBackend = androidGeminiBackend;
             this.loadId = loadId;
         }
     }
