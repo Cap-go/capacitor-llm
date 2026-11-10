@@ -250,6 +250,7 @@ public class LLM {
             primaryBackend,
             primaryBackend,
             request.maxTokens,
+            null,
             context.getCacheDir().getAbsolutePath()
         );
         Engine loadedEngine = new Engine(config);
@@ -494,7 +495,7 @@ public class LLM {
     private Conversation createLiteRtConversation() {
         ConversationConfig defaults = new ConversationConfig();
         SamplerConfig samplerConfig = new SamplerConfig(topk, DEFAULT_TOP_P, temperature.doubleValue(), randomSeed);
-        ConversationConfig config = defaults.copy(
+        ConversationConfig config = new ConversationConfig(
             defaults.getSystemInstruction(),
             defaults.getInitialMessages(),
             defaults.getTools(),
