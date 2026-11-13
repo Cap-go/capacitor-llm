@@ -34,7 +34,9 @@ buildscript {
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.13.0'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20'
+        // Kotlin is only applied when the opt-in genai-agent is enabled. genai-agent 1.0.0-alpha1 ships
+        // Kotlin 2.4 metadata, which the official Capacitor Kotlin (2.2.20) cannot read, so this stays on 2.3.0.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.3.0'
     }
 }
 
