@@ -104,7 +104,7 @@ dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
     implementation project(':capacitor-android')
     implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
-    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.10.0'
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.16.1'
     implementation 'com.google.mediapipe:tasks-genai:0.10.24'
     implementation 'com.google.mlkit:genai-prompt:1.0.0-beta2'
 
