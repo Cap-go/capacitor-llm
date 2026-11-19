@@ -17,8 +17,8 @@ let package = Package(
         // The upstream repo checkout currently pulls non-iOS LFS blobs that break SwiftPM resolution here.
         .binaryTarget(
             name: "CLiteRTLM",
-            url: "https://github.com/google-ai-edge/LiteRT-LM/releases/download/v0.13.0/CLiteRTLM.xcframework.zip",
-            checksum: "af23c77b8eae3f1888fc0348c133af8a13f1e8a89f5788de7e38457f512e768a"
+            url: "https://github.com/google-ai-edge/LiteRT-LM/releases/download/v0.19.1/CLiteRTLM.xcframework.zip",
+            checksum: "21cf294b3dfdd9c8166b0f7934ed392d5c69c8bfa57cd1a20e341a7d16874017"
         ),
         .target(
             name: "LiteRTLM",
